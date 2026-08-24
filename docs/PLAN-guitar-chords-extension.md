@@ -209,6 +209,44 @@ Tooltip la hover/click pe orice acord afișat; acord fără diagramă → toolti
 **POARTĂ 7:** hover pe fiecare din: C, G, D, A, E, Am, Em, Dm, F, Bm, F#m, E7, Am7, Cmaj7,
 Dsus4 → diagramă corectă (verifică 3 dintre ele contra unei surse externe).
 
+> **REZULTAT PAȘII 4–7 (2026-08-24, Opus) — implementați și verificați într-un Chromium real.**
+>
+> Poarta 3 a fost trecută pe muzică reală (Andrei: „toate momentele sunt corecte, n-am văzut
+> greșeală"), așa că am mers mai departe cu 4, 5, 6 și 7 într-o singură rundă.
+>
+> **Verificarea nu mai e doar sintetică.** `tests/ui.test.mjs` încarcă extensia într-un Chromium
+> real și interceptează adresa YouTube, servind o pagină cu aceeași structură pe care se bazează
+> content.js (`#below`, `.html5-video-player`, `<video>`). Content scriptul se injectează normal,
+> fiindcă adresa se potrivește cu tiparul din manifest. 12 verificări, toate trec.
+>
+> **Capcană de care să ții cont dacă umbli la testul de UI:** content scriptul rulează într-o
+> lume izolată, cu propriul înveliș peste elementele DOM. O proprietate `currentTime` pusă din
+> pagină cu `defineProperty` **nu se vede acolo** — testul arăta încăpățânat primul acord.
+> Soluția: `<video>` real, cu un WAV tăcut generat în test ca sursă, care chiar se poate derula.
+>
+> **Pasul 4 — panoul.** Acordul curent (mare) + diagrama lui + ce urmează. Pe canalul de
+> memorie arătăm **ce vine**, nu istoricul: la sing-along asta folosește.
+>
+> **Pasul 5 — memoria.** `chords:<videoId>` în `chrome.storage.local`. La redare urmărim
+> `video.currentTime` prin căutare binară, într-o buclă `requestAnimationFrame` care redesenează
+> doar la schimbarea acordului. Aici dispare întârzierea de ~1s din analiza live.
+> Sugestia de capo se **recalculează la fiecare încărcare**, nu se citește orbește din memorie.
+>
+> **Pasul 6 — capo și transpoziție.** `acord cântat = acord auzit + transpoziție − capo`.
+> Capo-ul sugerat e cel care dă cele mai multe forme deschise (`bestCapo`). Exemplu real:
+> „Wonderwall" sună F#m A E B; cu capo 2 cânți Em G D A — vezi `docs/capturi/panou-capo.png`.
+>
+> **Pasul 7 — diagramele.** Nu ținem o bază de date cu toate acordurile: ținem formele deschise
+> și construim restul ca forme de bară după sistemul CAGED. `tests/diagrams.test.mjs` verifică
+> **muzical** fiecare formă — calculează ce note ies din corzi și le compară cu notele acordului
+> (24/24 majore și minore + 20 septime/suspendate). O digitație greșită ar fi mai rea decât una
+> lipsă: cineva ar învăța să cânte fals și ar da vina pe urechea lui.
+>
+> **Schimbare de design față de plan:** diagrama nu e un balon la hover, ci stă **permanent**
+> lângă acordul curent. Prima variantă (tooltip) acoperea butoanele de capo și ieșea din panou —
+> s-a văzut în captura de ecran. Hover pe un acord care urmează îi arată diagrama temporar.
+> Un test verifică explicit că diagrama nu suprapune controalele.
+
 ### Pasul 8 — Options + trecere de logging
 Pagina de opțiuni: comutator „Debug logging" + buton „Golește cache-ul de acorduri".
 Trecere finală: TOATE fișierele folosesc `lib/logger.js` (nimic `console.log` direct);

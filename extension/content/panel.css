@@ -1,64 +1,223 @@
-/* Panoul ChordTab — paleta: Ink #0B0F10, Paper #F4F2EC, Teal #1F8F87 / #12635D */
+/* Panoul ChordTab. Paleta proiectului: Ink #0B0F10, Paper #F4F2EC, Teal #1F8F87 / #12635D.
+   Toate clasele au prefix .ct- ca să nu se ciocnească de stilurile YouTube. */
 
 #chordtab-panel {
-  background: #0b0f10;
-  color: #f4f2ec;
-  border: 1px solid #12635d;
-  border-radius: 12px;
-  padding: 12px 16px;
+  --ct-ink: #0b0f10;
+  --ct-paper: #f4f2ec;
+  --ct-teal: #1f8f87;
+  --ct-teal-dark: #12635d;
+
+  background: var(--ct-ink);
+  color: var(--ct-paper);
+  border: 1px solid var(--ct-teal-dark);
+  border-radius: 14px;
+  padding: 14px 18px 16px;
   margin: 12px 0;
   font-family: "Inter Tight", Roboto, Arial, sans-serif;
+  position: relative;
 }
 
-#chordtab-panel.chordtab-overlay {
+#chordtab-panel.ct-overlay {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 9999;
-  width: 280px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  width: 320px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
 }
 
-.chordtab-header {
+/* --- antet --- */
+
+.ct-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.chordtab-title {
+.ct-title {
   font-weight: 700;
-  color: #1f8f87;
+  color: var(--ct-teal);
   letter-spacing: 0.02em;
 }
 
-.chordtab-status {
+.ct-status {
+  flex: 1;
   font-size: 12px;
   opacity: 0.7;
+  min-width: 0;
 }
 
-.chordtab-current {
-  font-size: 44px;
-  font-weight: 800;
-  line-height: 1.1;
-  text-align: center;
-  color: #f4f2ec;
-  min-height: 52px;
+.ct-status.is-warning {
+  opacity: 1;
+  color: #e8b84b;
 }
 
-.chordtab-strip {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-  justify-content: center;
-}
-
-.chordtab-chip {
-  background: #12635d;
-  color: #f4f2ec;
-  border-radius: 6px;
-  padding: 2px 8px;
+.ct-action {
+  background: var(--ct-teal);
+  color: var(--ct-paper);
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font: inherit;
   font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ct-action:hover { background: #26a79d; }
+
+/* --- acordul curent + ce urmează --- */
+
+.ct-now {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid rgba(244, 242, 236, 0.12);
+  flex-wrap: wrap;
+}
+
+.ct-chord-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ct-current {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  min-width: 2.1em;
   cursor: default;
 }
+
+/* Diagrama acordului curent — mereu vizibilă, nu la hover. */
+.ct-diagram-slot {
+  background: var(--ct-paper);
+  border-radius: 10px;
+  padding: 4px 6px;
+  line-height: 0;
+}
+
+.ct-diagram-slot.is-empty {
+  background: none;
+  padding: 0;
+}
+
+.ct-diagram {
+  display: block;
+  width: 108px;
+  height: auto;
+}
+
+.ct-chip.ct-has-diagram {
+  cursor: help;
+}
+
+.ct-next {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ct-next-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+}
+
+.ct-next-list {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.ct-chip {
+  background: rgba(31, 143, 135, 0.22);
+  border: 1px solid var(--ct-teal-dark);
+  color: var(--ct-paper);
+  border-radius: 7px;
+  padding: 3px 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* --- controale: capo + ton --- */
+
+.ct-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+}
+
+.ct-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ct-group-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  cursor: help;
+}
+
+.ct-capo-buttons { display: flex; gap: 3px; }
+
+.ct-btn {
+  background: transparent;
+  color: var(--ct-paper);
+  border: 1px solid rgba(244, 242, 236, 0.22);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 26px;
+}
+
+.ct-btn:hover { border-color: var(--ct-teal); }
+
+.ct-capo.is-suggested { border-color: var(--ct-teal); }
+
+.ct-capo.is-active,
+.ct-btn.is-active {
+  background: var(--ct-teal);
+  border-color: var(--ct-teal);
+  font-weight: 700;
+}
+
+.ct-capo-hint {
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+.ct-tr-value {
+  min-width: 2em;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ct-reset { margin-left: auto; }
+
+/* --- desenul diagramei --- */
+
+.ct-d-name { fill: #0b0f10; font-size: 15px; font-weight: 700; }
+.ct-d-fret, .ct-d-capo { fill: #5b6668; font-size: 11px; }
+.ct-d-string, .ct-d-fretline { stroke: #9aa3a4; stroke-width: 1.2; }
+.ct-d-nut { fill: #0b0f10; }
+.ct-d-capo-bar { fill: #1f8f87; }
+.ct-d-mark { fill: #5b6668; font-size: 13px; }
+.ct-d-open { fill: none; stroke: #5b6668; stroke-width: 1.4; }
+.ct-d-dot, .ct-d-barre { fill: #12635d; }

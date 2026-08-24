@@ -6,23 +6,32 @@ import { createLogger } from './lib/logger.js';
 const log = createLogger('background');
 const state = { capturingTabId: null };
 
-chrome.action.onClicked.addListener(async (tab) => {
+chrome.action.onClicked.addListener((tab) => toggleCapture(tab, 'click pe iconiță'));
+
+async function toggleCapture(tab, reason) {
   try {
-    if (!tab.url || !tab.url.includes('youtube.com/watch')) {
-      log.warn('Click pe iconiță în afara unei pagini de video YouTube — ignor.', tab.url);
+    if (!tab?.url || !tab.url.includes('youtube.com/watch')) {
+      log.warn('Cerere de captură în afara unei pagini de video YouTube — ignor.', tab?.url);
       return;
     }
     if (state.capturingTabId === tab.id) {
-      await stopCapture('click utilizator');
+      await stopCapture(reason);
       return;
     }
     if (state.capturingTabId !== null) await stopCapture('captură nouă pe alt tab');
     await startCapture(tab);
   } catch (err) {
-    log.error('Eroare la pornirea/oprirea capturii:', err);
+    log.error('Eroare la pornirea/oprirea capturii:', err?.message || err);
     await stopCapture('eroare').catch(() => {});
+    // Cel mai probabil motiv: tabCapture cere ca extensia să fi fost INVOCATĂ (click pe
+    // iconiță). Un click în pagină nu contează ca invocare, deci îi spunem omului ce să facă.
+    if (tab?.id != null) {
+      chrome.tabs.sendMessage(tab.id, {
+        target: 'content', type: 'CAPTURE_FAILED', reason: String(err?.message || err),
+      }).catch(() => {});
+    }
   }
-});
+}
 
 async function startCapture(tab) {
   // ORDINEA CONTEAZĂ: cerem streamId ÎNAINTE de orice alt await. getMediaStreamId are nevoie
@@ -85,11 +94,18 @@ function notifyContent(msg) {
 
 // Releu: mesajele offscreen (CHORD_EVENT etc.) către content scriptul tabului capturat.
 // CT_TIME (content -> offscreen) NU trece pe aici: runtime.sendMessage ajunge direct la offscreen.
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.target === 'background' && msg.type === 'OFFSCREEN_READY') {
-    log.debug('Documentul offscreen a semnalat că e pregătit.');
-    offscreenReady?.();
-    return;
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.target === 'background') {
+    if (msg.type === 'OFFSCREEN_READY') {
+      log.debug('Documentul offscreen a semnalat că e pregătit.');
+      offscreenReady?.();
+      return;
+    }
+    // Butoanele din panoul de sub video.
+    if (msg.type === 'REQUEST_START' || msg.type === 'REQUEST_STOP') {
+      if (sender?.tab) toggleCapture(sender.tab, 'buton din panou');
+      return;
+    }
   }
   if (msg?.target === 'content' && state.capturingTabId !== null) {
     notifyContent(msg);
