@@ -67,6 +67,29 @@ try {
     console.log('  Poarta 0 (browser): lanțul de detecție rulează sub CSP-ul MV3, chord=C ✔');
     exitCode = 0;
   }
+
+  // --- POARTA 8: consola tace cu debug oprit, vorbește cu el pornit ---
+  const noisy = lines.filter((l) => l.includes('[ChordTab:'));
+  if (noisy.length > 0) {
+    exitCode = 1;
+    console.error(`  EȘEC Poarta 8 — cu debug oprit, consola ar trebui să tacă. ${noisy.length} mesaje:`);
+    for (const l of noisy.slice(0, 5)) console.error('    |', l);
+  } else {
+    console.log('  Poarta 8: cu debug oprit, consola e curată ✔');
+  }
+
+  await page.evaluate(() => chrome.storage.local.set({ debug: true }));
+  const after = [];
+  page.on('console', (m) => after.push(m.text()));
+  await page.reload();
+  await page.waitForFunction(() => window.__chordtabGate || null, null, { timeout: 60000 }).catch(() => {});
+  const spoken = after.filter((l) => l.includes('[ChordTab:'));
+  if (spoken.length === 0) {
+    exitCode = 1;
+    console.error('  EȘEC Poarta 8 — cu debug pornit nu s-a logat nimic.');
+  } else {
+    console.log(`  Poarta 8: cu debug pornit, traseul se vede (${spoken.length} mesaje) ✔`);
+  }
 } catch (err) {
   console.error('  EȘEC la pornirea browserului:', err?.message || err);
 } finally {

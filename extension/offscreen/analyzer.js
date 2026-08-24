@@ -176,7 +176,11 @@ export async function selfTest() {
   const { chroma, bass } = a.frameToChroma(frame);
   const res = matchChord(chroma, { bass });
   const ok = res.label === 'C';
-  log.warn(`[POARTA 0] chord=${res.label} (scor ${res.score.toFixed(2)}) — ${ok ? 'CORECT ✔' : 'GREȘIT ✘'}`);
+  const line = `[POARTA 0] chord=${res.label} (scor ${res.score.toFixed(2)})`;
+  // Reușita se vede doar cu debug pornit; eșecul se strigă mereu, fiindcă înseamnă că
+  // motorul de detecție nu funcționează deloc în browserul ăsta.
+  if (ok) log.info(`${line} — CORECT ✔`);
+  else log.error(`${line} — GREȘIT ✘`);
   a.dispose();
   return ok;
 }

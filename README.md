@@ -4,9 +4,9 @@ Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browseru
 (zero servere, zero chei API, zero costuri) și afișează acordurile principale sincronizate
 cu redarea — cu diagrame la hover, sugestie de capo și transpoziție.
 
-**Stare:** Etapa 1, Pașii 0–7 încheiați. Mai rămâne ambalarea (Pasul 9).
+**Stare:** Etapa 1 completă (Pașii 0–9).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md) ·
-Ce e de verificat acum: [docs/VERIFICARE.md](docs/VERIFICARE.md)
+Ce e de verificat: [docs/VERIFICARE.md](docs/VERIFICARE.md)
 
 ![Panoul ChordTab sub video](docs/capturi/panou.png)
 
@@ -17,13 +17,30 @@ Acordul curent, diagrama lui pe corzi și ce urmează — sincronizat cu melodia
 Când melodia are capo, îți spune unde să-l pui ca să cânți forme deschise: „Wonderwall" sună
 F#m A E B, dar cu capo 2 cânți Em G D A. Bara verde din diagramă e capodastrul.
 
-## Instalare (dezvoltare)
+## Instalare
 
-1. Deschide `chrome://extensions`, pornește **Developer mode**.
-2. **Load unpacked** → alege folderul `extension/`.
-3. Deschide un video pe YouTube și apasă pe iconița extensiei.
+1. Descarcă arhiva (`chordtab-x.y.z.zip`) și **dezarhiveaz-o** într-un folder pe care îl păstrezi.
+2. Deschide `chrome://extensions` și pornește **Developer mode** (colț dreapta-sus).
+3. Apasă **Load unpacked** și alege folderul dezarhivat.
+4. Prinde iconița în bară (click pe puzzle → pin), ca s-o ai la îndemână.
 
-Verificarea pas cu pas, în română: [docs/VERIFICARE.md](docs/VERIFICARE.md)
+**Cum se folosește:** deschide o melodie pe YouTube, dă play, apasă iconița. Extensia ascultă
+și afișează acordurile sub video. Când ai terminat, apasă din nou — acordurile rămân memorate,
+iar a doua oară apar instant, sincronizate exact.
+
+Nu-ți cere cont, nu-ți cere nicio cheie și nu trimite nimic nicăieri. Sunetul e analizat local.
+
+### Pentru dezvoltare
+
+```bash
+git clone https://github.com/andreitrandaf1982-glitch/chordtab
+cd chordtab && npm install
+npx playwright install chromium   # pentru testele din browser
+npm test
+npm run build                     # produce dist/chordtab-x.y.z.zip
+```
+
+Încarcă direct folderul `extension/` cu **Load unpacked**.
 
 ## Teste
 
@@ -40,8 +57,9 @@ npm test
 | `tests/progression.test.mjs` | urmărirea schimbărilor de acord în timp, pe o progresie |
 | `tests/stability.test.mjs` | acuratețe și stabilitate pe semnal ostil (melodie + percuție) |
 | `tests/diagrams.test.mjs` | fiecare digitație, verificată **muzical**: ce note ies din corzi |
-| `tests/browser-selftest.mjs` | extensia încărcată într-un Chromium real, sub CSP-ul MV3 |
+| `tests/browser-selftest.mjs` | extensia într-un Chromium real, sub CSP-ul MV3, plus logging |
 | `tests/ui.test.mjs` | panoul, memoria, capo, transpoziția și diagramele — în browser real |
+| `tests/package.test.mjs` | arhiva dezarhivată și încărcată ca un utilizator (`npm run test:package`) |
 
 `npm run test:unit` sare peste testul din browser dacă nu vrei să aștepți.
 
@@ -81,8 +99,19 @@ Totul e cod propriu, fără biblioteci externe și fără WebAssembly. Nimic nu 
   notă-cu-notă. Acuratețea scade pe mixuri foarte dense.
 - Prima analiză se face în timp ce melodia se redă; rezultatul se salvează per video.
 - La viteze de redare diferite de 1x sincronizarea rămâne corectă, dar calitatea detecției scade.
+- Presupune **acordaj standard**. Acordajele coborâte (drop D și rudele lui) n-ar putea fi
+  ghicite din sunet oricum: basul cântă în același registru, deci n-am avea cum să deosebim o
+  chitară coborâtă de un bas obișnuit.
 - Upgrade posibil în viitor: analiză de precizie printr-un API plătit (ex. Klangio),
   cu cheia securizată printr-un backend (Supabase Edge Functions) — neinclus în această versiune.
+
+## Depanare
+
+Dacă ceva nu merge, pornește **Debug logging** din pagina de opțiuni a extensiei
+(`chrome://extensions` → ChordTab → *Detalii* → *Opțiuni extensie*) și deschide consola.
+Toate mesajele încep cu `[ChordTab:...]`, deci le poți filtra scriind `ChordTab`.
+
+Tot de acolo poți **goli memoria de acorduri**, dacă vrei să reanalizezi totul de la zero.
 
 ## Licență
 

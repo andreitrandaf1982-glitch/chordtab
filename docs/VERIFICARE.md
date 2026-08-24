@@ -1,89 +1,87 @@
-# Verificare în Chrome — pasul curent: **Pașii 4–7 (panou, memorie, capo, diagrame)**
+# Verificare în Chrome — **Etapa 1 completă**
 
-Document viu: descrie mereu ce e de verificat ACUM. Ce s-a trecut deja rămâne mai jos, pe scurt.
-
----
-
-## Ce s-a schimbat
-
-Poarta 3 a trecut („toate momentele sunt corecte"), așa că am construit tot restul funcțional.
-Panoul arată acum așa:
-
-![Panoul ChordTab](capturi/panou.png)
-
-**Pasul 4 — panoul.** Acordul curent (mare), diagrama lui, și **ce urmează**. La sing-along
-contează ce vine, nu ce a fost.
-
-**Pasul 5 — memorie per melodie.** După prima analiză, acordurile se salvează. A doua oară când
-deschizi melodia apar **instant**, fără să mai analizezi nimic — și **fără întârzierea de o
-secundă**, fiindcă avem cronologia completă și știm exact la ce secundă vine fiecare acord.
-
-**Pasul 6 — capo și transpoziție.** Exact ce ai cerut la început: dacă melodia are capo,
-extensia îți spune unde să-l pui ca să cânți forme deschise.
-
-![Sugestie de capo](capturi/panou-capo.png)
-
-„Wonderwall" sună F#m A E B — greu, numai acorduri cu bară. Cu capo 2 cânți Em G D A, adică
-numai forme deschise. Bara verde din diagramă e capodastrul: pozițiile se numără de la el.
-
-**Pasul 7 — diagramele.** Asta ai încercat să apeși și nu mergea. Acum diagrama acordului curent
-stă **permanent** lângă el. Dacă treci cu mouse-ul peste un acord care urmează, îți arată
-diagrama lui, apoi revine.
+Document viu: descrie mereu ce e de verificat ACUM.
 
 ---
 
-## Ce ai de făcut
+## Ce s-a schimbat în ultima rundă
 
-1. Pe `chrome://extensions`, la ChordTab, apasă **Reload**.
-2. Deschide o melodie, dă play, apasă iconița. Lasă-l să analizeze un minut-două.
-3. Apasă **Oprește** (sau iconița din nou). Acordurile se salvează automat.
-4. **Dă refresh la pagină** — aici e partea interesantă: acordurile trebuie să apară instant,
-   fără să mai analizezi, și sincronizate exact.
-5. Derulează prin melodie (dă click pe bara de progres). Acordul afișat trebuie să sară imediat
-   la cel potrivit.
-6. Apasă pe pozițiile de **capo** și pe **± ton** și uită-te cum se schimbă acordurile și diagrama.
+**Pâlpâitul e reparat.** Aveai dreptate că era ceva rău, și erau două cauze. Principala: caseta
+diagramei își schimba mărimea când n-avea ce arăta, ceea ce muta tot panoul, îți scotea cursorul
+de pe acord, diagrama revenea, panoul se muta la loc — de zeci de ori pe secundă. Acum caseta are
+mărime fixă, plină sau goală. Un test ține cursorul nemișcat o secundă și jumătate și numără
+schimbările; dacă trec de trei, cade.
 
----
+**Memoria e reparată.** Tot două bug-uri. Acordurile se salvau doar dacă apăsai explicit
+„Oprește" — un refresh în timpul analizei pierdea tot. Acum se salvează din mers. Iar al doilea,
+găsit scriind testul: citirea din memorie e asincronă și, dacă porneai analiza imediat după
+deschiderea paginii, memoria veche se scria peste analiza tocmai pornită.
 
-## Ce mă interesează să-mi spui
+**Culoarea** e acum albastrul din logo-ul tău, `#3058F0`.
 
-1. După refresh, acordurile au apărut instant și sincronizate? (da / nu)
-2. Când ai derulat prin melodie, acordul a sărit unde trebuie? (da / nu)
-3. Diagramele arată bine? Le recunoști ca fiind digitațiile corecte? (da / nu / care greșește)
-4. Sugestia de capo ți s-a părut rezonabilă pe melodia ta?
-5. Ceva la aspectul panoului care te deranjează?
+**Drop D scos**, cum ai cerut.
 
-La punctul 3 ai avantajul că știi chitară — dacă vezi o digitație care nu e cea pe care o
-cânți tu, spune-mi care acord. Toate au fost verificate automat (se calculează ce note ies din
-corzi și se compară cu notele acordului), dar există mai multe digitații corecte pentru același
-acord și s-ar putea să nu fie cea cu care ești obișnuit.
+**Logurile sunt stinse implicit** (Pasul 8) — consola rămâne curată pentru cine folosește
+extensia. Se pornesc din pagina de opțiuni când vrei să vezi ce se întâmplă.
+
+**Arhiva pentru comunitate** e gata (Pasul 9): `npm run build` face un `.zip` de 32 KB.
 
 ---
 
-## Ce mai rămâne
+## Ce te rog să verifici
 
-- **Pasul 8** — trecerea de logging (mesajele de debug se sting implicit).
-- **Pasul 9** — ambalarea pentru comunitate: instrucțiuni, arhivă, test pe un Chrome curat.
-- **Ideea ta cu tiparul pe secțiuni** (strofă / refren / punte) — acum se poate face, fiindcă
-  avem cronologia completă în memorie. Nu e în planul inițial și cere puțină gândire de
-  arhitectură, deci ăla e momentul să treci pe Fable.
+Reload la extensie, apoi:
+
+1. **Pâlpâitul.** Pune melodia pe pauză și plimbă mouse-ul peste acordurile care urmează.
+   Trebuie să fie complet liniștit.
+2. **Memoria.** Analizează un minut, apoi dă refresh **fără să apeși Oprește**. Acordurile
+   trebuie să fie acolo, în modul „Acorduri memorate".
+3. **Derularea.** Sari prin melodie cu bara de progres — acordul trebuie să sară unde trebuie.
+4. **Culoarea și aspectul.** Spune-mi dacă albastrul e cel potrivit.
+5. **Diagramele.** Tu știi chitară — dacă vreo digitație nu e cea pe care o cânți, zi-mi care.
 
 ---
 
-## Porți deja trecute
+## Ce înseamnă că Etapa 1 e completă
 
-- **Poarta 0** (motorul merge în browser) — automatizată în `npm test`.
-- **Poarta 1** (captura audio, fără să taie sunetul) — trecută.
-- **Poarta 2** (acordurile au legătură cu melodia) — trecută.
-- **Poarta 3** (netezirea) — trecută pe muzică reală: „toate momentele sunt corecte".
-- **Porțile 4–7** — verificate automat într-un Chromium real (`npm test`, 12 verificări).
-  Rămâne confirmarea ta pe o melodie adevărată.
+Tot ce era în plan e făcut și verificat:
+
+| | Ce face | Cum e verificat |
+|---|---|---|
+| 0 | Motorul de detecție (FFT → chroma → acorduri) | 8/8 acorduri, la 44100 și 48000 Hz |
+| 1 | Captura audio fără să taie sunetul | manual, de tine |
+| 2 | Acordurile urmăresc melodia | manual, de tine |
+| 3 | Netezirea | 28% → 97% acuratețe, 51 → 4 schimbări |
+| 4 | Panoul | 15 verificări într-un Chromium real |
+| 5 | Memoria per melodie | idem, inclusiv refresh în timpul analizei |
+| 6 | Capo și transpoziție | idem |
+| 7 | Diagramele | 44 de digitații verificate muzical |
+| 8 | Logurile | consola tace cu debug oprit, vorbește cu el pornit |
+| 9 | Arhiva | dezarhivată și încărcată automat, ca un utilizator |
+
+`npm test` rulează tot. `npm run test:package` verifică arhiva.
+
+---
+
+## Ce urmează
+
+**Ideea ta cu tiparul pe secțiuni** — strofă, refren, punte. Acum se poate face: avem cronologia
+completă în memorie, deci se pot căuta repetițiile.
+
+**Ăsta e momentul să treci pe Fable.** E funcție nouă, nu e în plan, și cere decizii pe care nu
+le poți lua din mers: ce înseamnă „o secțiune", cum decizi că două pasaje sunt același refren,
+ce faci când melodia nu se repetă curat. Pe Fable facem întâi planul, apoi îl execuți pe Opus —
+exact ritualul obișnuit.
+
+Până atunci, mai poți cere oricând ajustări de aspect sau reglaje — alea rămân clasă Opus.
+
+---
 
 ## Unde te uiți dacă ceva crapă
 
-Trei console, fiecare cu altă bucată:
+Pornește **Debug logging** din pagina de opțiuni, apoi:
 - **service worker** (`chrome://extensions` → *Inspect views: service worker*) — pornirea capturii
 - **offscreen.html** (apare doar cât captura e pornită) — analiza audio
 - **consola paginii YouTube** (F12) — panoul, memoria și redarea
 
-Toate mesajele încep cu `[ChordTab:...]`, deci le poți filtra scriind `ChordTab` în consolă.
+Toate mesajele încep cu `[ChordTab:...]`, deci le poți filtra scriind `ChordTab`.

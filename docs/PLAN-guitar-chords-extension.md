@@ -259,6 +259,29 @@ limitări oneste (acuratețe ~75-85%, doar acorduri principale), mențiunea Klan
 upgrade viitor. Test final pe un profil Chrome curat.
 **POARTĂ 9:** o persoană care urmează DOAR README-ul ajunge la acorduri pe ecran.
 
+> **REZULTAT PAȘII 8–9 (2026-08-24, Opus) — ETAPA 1 COMPLETĂ.**
+>
+> **Pasul 8 — logging.** Debug e acum implicit OPRIT; warn și error se văd mereu, fiindcă
+> alea înseamnă că ceva chiar s-a stricat. Singurul `console` direct rămas e în
+> `content/loader.js`, și e justificat: dacă tocmai importul modulelor eșuează, nici loggerul
+> nu s-a încărcat.
+> **Defect real găsit la trecerea asta:** citirea setării din storage e asincronă, iar modulele
+> loghează imediat ce se încarcă — deci exact mesajele de la pornire, cele mai utile la
+> depanare, se pierdeau *chiar cu debug pornit*. Acum sunt ținute într-un tampon (max 200) și
+> vărsate când se află setarea. `tests/browser-selftest.mjs` verifică ambele stări.
+>
+> **Pasul 9 — ambalare.** `npm run build` produce `dist/chordtab-<versiune>.zip` (22 fișiere,
+> 32 KB) și refuză să împacheteze dacă găsește fișiere care seamănă a secrete sau dacă lipsește
+> ceva esențial din manifest.
+> `npm run test:package` construiește arhiva, o **dezarhivează într-un folder nou și o încarcă
+> într-un Chromium cu profil curat** — adică exact ce va face un om din comunitate. Verifică
+> motorul de detecție, panoul pe o pagină de tip YouTube și pagina de opțiuni. Testăm ARHIVA,
+> nu folderul de lucru: dacă uităm un fișier la împachetare, aici se vede.
+>
+> **Scos pe parcurs:** comutatorul de acordaj Drop D. Ideea a venit dintr-o melodie anume, dar
+> există drop D, drop C, drop orice — un comutator pentru unul singur e arbitrar. Detecția
+> automată a acordajului rămâne imposibilă cinstit: basul cântă în același registru.
+
 ## Riscuri cunoscute și ce faci cu ele
 
 1. **Tabul se mutează la captură** → e normal; legătura `sursă→destination` din offscreen
