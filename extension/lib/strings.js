@@ -21,6 +21,21 @@ export const STR = {
   upNext: 'urmează',
   recent: 'până acum',
 
+  // structura melodiei
+  structure: 'Structura',
+  sectionNames: {
+    intro: 'Intro',
+    verse: 'Strofă',
+    chorus: 'Refren',
+    bridge: 'Punte',
+    outro: 'Final',
+  },
+  sectionLabel: (letter, name) => (name ? `${letter} · ${name}` : `Partea ${letter}`),
+  freeSection: (name) => name || 'Liber',
+  jumpTo: (label) => `Sari la ${label}`,
+  times: (n) => `×${n}`,
+  upNextSection: (label) => `urmează: ${label}`,
+
   // capo & transpoziție
   capo: 'Capo',
   noCapo: 'fără',

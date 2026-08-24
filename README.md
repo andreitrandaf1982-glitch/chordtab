@@ -4,7 +4,7 @@ Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browseru
 (zero servere, zero chei API, zero costuri) și afișează acordurile principale sincronizate
 cu redarea — cu diagrame la hover, sugestie de capo și transpoziție.
 
-**Stare:** Etapa 1 completă (Pașii 0–9).
+**Stare:** Etapa 1 completă + structura melodiei (v0.2.0).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md) ·
 Ce e de verificat: [docs/VERIFICARE.md](docs/VERIFICARE.md)
 
@@ -15,7 +15,13 @@ Acordul curent, diagrama lui pe corzi și ce urmează — sincronizat cu melodia
 ![Sugestie de capo](docs/capturi/panou-capo.png)
 
 Când melodia are capo, îți spune unde să-l pui ca să cânți forme deschise: „Wonderwall" sună
-F#m A E B, dar cu capo 2 cânți Em G D A. Bara verde din diagramă e capodastrul.
+F#m A E B, dar cu capo 2 cânți Em G D A. Bara albastră din diagramă e capodastrul.
+
+![Structura melodiei](docs/capturi/panou-structura.png)
+
+**Structura melodiei**, găsită singură din repetiții: bara arată unde e strofa și unde e
+refrenul (click pe un segment = sari acolo), iar legenda îți dă tiparul fiecărei secțiuni
+**o singură dată** — „Strofă: G D Am C, de 6 ori" — în loc de un șir nesfârșit de acorduri.
 
 ## Instalare
 
@@ -57,6 +63,7 @@ npm test
 | `tests/progression.test.mjs` | urmărirea schimbărilor de acord în timp, pe o progresie |
 | `tests/stability.test.mjs` | acuratețe și stabilitate pe semnal ostil (melodie + percuție) |
 | `tests/diagrams.test.mjs` | fiecare digitație, verificată **muzical**: ce note ies din corzi |
+| `tests/sections.test.mjs` | detecția structurii: bucle, secțiuni, nume, zgomot, cazuri limită |
 | `tests/browser-selftest.mjs` | extensia într-un Chromium real, sub CSP-ul MV3, plus logging |
 | `tests/ui.test.mjs` | panoul, memoria, capo, transpoziția și diagramele — în browser real |
 | `tests/package.test.mjs` | arhiva dezarhivată și încărcată ca un utilizator (`npm run test:package`) |
@@ -89,6 +96,8 @@ Totul e cod propriu, fără biblioteci externe și fără WebAssembly. Nimic nu 
 - **Acordurile sincronizate** cu melodia, sub video, cu ce urmează la vedere.
 - **Diagrama pe corzi** a acordului curent, mereu vizibilă; hover pe unul care urmează ți-o arată
   pe a lui.
+- **Structura melodiei**: strofă, refren, punte — găsite din repetiții, cu tiparul fiecăreia
+  afișat o singură dată și cu salt la click. Îți arată și în ce secțiune ești acum.
 - **Capo**: îți spune pe ce poziție să-l pui ca să cânți forme deschise, și îți arată formele.
 - **Transpoziție** ±6 semitonuri, dacă vrei să cânți în altă tonalitate.
 - **Memorie per melodie**: a doua oară acordurile apar instant și perfect sincronizate.

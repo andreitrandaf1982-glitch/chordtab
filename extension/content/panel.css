@@ -153,6 +153,126 @@
   font-weight: 600;
 }
 
+/* --- structura melodiei: bara + legenda --- */
+
+/* Nuanțe derivate din albastrul de brand, ca panoul să rămână al lui. */
+#chordtab-panel {
+  --ct-g0: #3058f0;
+  --ct-g1: #7a4ff0;
+  --ct-g2: #2f8ff0;
+  --ct-g3: #5a68d8;
+  --ct-g4: #2f5ab8;
+}
+
+.ct-structure {
+  padding: 12px 0 2px;
+  border-bottom: 1px solid rgba(244, 242, 236, 0.12);
+}
+
+.ct-structure[hidden] { display: none; }
+
+.ct-bar {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+  margin: 6px 0 10px;
+}
+
+.ct-seg {
+  flex: 1 1 0;
+  min-width: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(244, 242, 236, 0.14);
+  color: var(--ct-paper);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0.62;
+  transition: opacity 120ms linear, outline-color 120ms linear;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.ct-seg[data-group="0"] { background: var(--ct-g0); }
+.ct-seg[data-group="1"] { background: var(--ct-g1); }
+.ct-seg[data-group="2"] { background: var(--ct-g2); }
+.ct-seg[data-group="3"] { background: var(--ct-g3); }
+.ct-seg[data-group="4"] { background: var(--ct-g4); }
+
+.ct-seg:hover { opacity: 0.85; }
+
+.ct-seg.is-current {
+  opacity: 1;
+  outline-color: var(--ct-paper);
+}
+
+.ct-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ct-legend-tag {
+  min-width: 5.6em;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(244, 242, 236, 0.12);
+}
+
+.ct-legend-tag[data-group="0"] { background: var(--ct-g0); }
+.ct-legend-tag[data-group="1"] { background: var(--ct-g1); }
+.ct-legend-tag[data-group="2"] { background: var(--ct-g2); }
+.ct-legend-tag[data-group="3"] { background: var(--ct-g3); }
+.ct-legend-tag[data-group="4"] { background: var(--ct-g4); }
+
+.ct-legend-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.ct-legend-chips .ct-chip { font-size: 14px; padding: 2px 8px; }
+
+.ct-legend-count {
+  font-size: 12px;
+  opacity: 0.55;
+  margin-left: auto;
+}
+
+/* Secțiunea curentă, lângă acord */
+.ct-section-now {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(244, 242, 236, 0.12);
+  margin-bottom: 2px;
+}
+
+.ct-section-now[hidden] { display: none; }
+.ct-section-now[data-group="0"] { background: var(--ct-g0); }
+.ct-section-now[data-group="1"] { background: var(--ct-g1); }
+.ct-section-now[data-group="2"] { background: var(--ct-g2); }
+.ct-section-now[data-group="3"] { background: var(--ct-g3); }
+.ct-section-now[data-group="4"] { background: var(--ct-g4); }
+
+.ct-next-label.is-announce {
+  opacity: 1;
+  color: var(--ct-blue-bright);
+}
+
 /* --- controale: capo + ton --- */
 
 .ct-controls {

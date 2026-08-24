@@ -39,7 +39,9 @@ const CHORDS = [
 // într-o lume izolată, care are propriul înveliș peste elementul DOM — o proprietate `currentTime`
 // pusă din pagină cu defineProperty NU se vede acolo. (Am aflat-o pe pielea noastră: testul
 // arăta mereu primul acord.) Așa că generăm un WAV tăcut de 20s și îl punem ca sursă.
-function silentWav(seconds = 20, sampleRate = 8000) {
+// 120 s: cronologia cu structură din testele de mai jos ajunge la 80 s, iar `seek` are nevoie
+// de media care chiar se poate poziționa acolo.
+function silentWav(seconds = 120, sampleRate = 8000) {
   const data = seconds * sampleRate;                 // 8 biți, mono
   const buf = Buffer.alloc(44 + data, 128);          // 128 = liniște în PCM 8 biți fără semn
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + data, 4); buf.write('WAVE', 8);
@@ -305,6 +307,157 @@ try {
       () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === 'E');
     const status = await page.locator('#chordtab-panel .ct-status').textContent();
     assert.match(status, /memorate/i, `după refresh aștept modul memorat, am „${status}”`);
+  });
+
+  // --- PAȘII 1-2: structura melodiei (bara + legenda + secțiunea curentă) ---
+  //
+  // Cronologie cu structură limpede: A A A A B B A A B B, buclă de 8 s.
+  // (Aceleași bucle ca în tests/sections.test.mjs, ca să știm ce trebuie să iasă.)
+  const STRUCT_ID = 'structVideo01';
+  {
+    const LOOP_A = [['G', 2], ['D', 2], ['Am', 2], ['C', 2]];
+    const LOOP_B = [['Em', 2], ['C', 2], ['G', 2], ['D', 2]];
+    const flat = [];
+    for (const loop of [...Array(4).fill(LOOP_A), ...Array(2).fill(LOOP_B),
+      ...Array(2).fill(LOOP_A), ...Array(2).fill(LOOP_B)]) flat.push(...loop);
+    const structured = [];
+    let t = 0, prev = null;
+    for (const [label, sec] of flat) {
+      if (label !== prev) structured.push({ t, label, confidence: 0.9 });
+      prev = label;
+      t += sec;
+    }
+
+    await (await liveWorker()).evaluate(async ({ id, chords }) => {
+      await chrome.storage.local.set({
+        [`chords:${id}`]: { version: 1, analyzedAt: new Date().toISOString(), capo: 0, chords },
+      });
+    }, { id: STRUCT_ID, chords: structured });
+
+    await page.goto(`https://www.youtube.com/watch?v=${STRUCT_ID}`);
+    await page.locator('#chordtab-panel').waitFor({ state: 'attached', timeout: 15000 });
+    await page.waitForFunction(() => {
+      const v = document.querySelector('video');
+      return v && v.readyState >= 1 && v.duration > 0;
+    }, null, { timeout: 15000 });
+    await page.locator('#chordtab-panel .ct-structure').waitFor({ state: 'visible', timeout: 10000 });
+  }
+
+  const segments = () => page.locator('#chordtab-panel .ct-seg');
+  const legendRows = () => page.locator('#chordtab-panel .ct-legend-row');
+
+  await check('Pasul 1: bara are un segment per secțiune, cu literele grupurilor', async () => {
+    const count = await segments().count();
+    assert.ok(count >= 4 && count <= 6, `aștept 4-6 segmente, am ${count}`);
+    const letters = (await segments().allTextContents()).map((s) => s.trim());
+    assert.deepEqual(letters.slice(0, 4), ['A', 'B', 'A', 'B'],
+      `literele barei: ${JSON.stringify(letters)}`);
+  });
+
+  await check('Pasul 1: legenda arată fiecare tipar O SINGURĂ dată, cu ×repetiții', async () => {
+    assert.equal(await legendRows().count(), 2, 'aștept două grupuri: A și B');
+    const rowA = legendRows().nth(0);
+    assert.deepEqual(await rowA.locator('.ct-chip').allTextContents(), ['G', 'D', 'Am', 'C'],
+      'tiparul lui A');
+    const rowB = legendRows().nth(1);
+    assert.deepEqual(await rowB.locator('.ct-chip').allTextContents(), ['Em', 'C', 'G', 'D'],
+      'tiparul lui B');
+    assert.match(await rowA.locator('.ct-legend-count').textContent(), /^×\d+$/);
+    // Strofa are 6 treceri prin buclă (4 + 2), refrenul 4 (2 + 2).
+    assert.equal((await rowA.locator('.ct-legend-count').textContent()).trim(), '×6');
+    assert.equal((await rowB.locator('.ct-legend-count').textContent()).trim(), '×4');
+  });
+
+  await check('Pasul 1: A și B sunt numite Strofă și Refren', async () => {
+    const tags = await page.locator('#chordtab-panel .ct-legend-tag').allTextContents();
+    assert.match(tags[0], /Strofă/, `prima etichetă: „${tags[0]}”`);
+    assert.match(tags[1], /Refren/, `a doua etichetă: „${tags[1]}”`);
+  });
+
+  await check('Pasul 1: click pe al doilea segment sare în melodie', async () => {
+    await page.evaluate(() => { document.querySelector('video').currentTime = 0; });
+    await page.waitForTimeout(200);
+    await segments().nth(1).click();
+    await page.waitForTimeout(300);
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    // Al doilea segment (refrenul) începe pe la 32 s.
+    assert.ok(Math.abs(t - 32) <= 1.5, `după click sunt la ${t.toFixed(1)}s, aștept ~32s`);
+  });
+
+  await check('Pasul 1: transpoziția schimbă și chip-urile din legendă', async () => {
+    await page.click('#chordtab-panel .ct-tr-up');
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-legend-row .ct-chip')?.textContent?.trim() === 'G#',
+      null, { timeout: 5000 });
+    assert.deepEqual(
+      await legendRows().nth(0).locator('.ct-chip').allTextContents(),
+      ['G#', 'D#', 'A#m', 'C#'], 'tiparul transpus cu un semiton');
+    await page.click('#chordtab-panel .ct-reset');
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-legend-row .ct-chip')?.textContent?.trim() === 'G',
+      null, { timeout: 5000 });
+  });
+
+  await check('Pasul 2: indicatorul arată secțiunea în care ești', async () => {
+    await seek(10);   // în interiorul primei strofe
+    await page.waitForFunction(
+      () => /Strofă/.test(document.querySelector('#chordtab-panel .ct-section-now')?.textContent || ''),
+      null, { timeout: 5000 });
+    await seek(36);   // în interiorul refrenului
+    await page.waitForFunction(
+      () => /Refren/.test(document.querySelector('#chordtab-panel .ct-section-now')?.textContent || ''),
+      null, { timeout: 5000 });
+  });
+
+  await check('Pasul 2: segmentul curent e evidențiat în bară', async () => {
+    await seek(36);
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-seg.is-current')?.dataset.index === '1',
+      null, { timeout: 5000 });
+    assert.equal(await page.locator('#chordtab-panel .ct-seg.is-current').count(), 1,
+      'exact un segment trebuie evidențiat');
+  });
+
+  await check('Pasul 2: secțiunea următoare e anunțată înainte de graniță', async () => {
+    await seek(46); // aproape de finalul refrenului (~48s)
+    await page.waitForFunction(
+      () => /urmează:/.test(document.querySelector('#chordtab-panel .ct-next-label')?.textContent || ''),
+      null, { timeout: 5000 });
+    const txt = await page.locator('#chordtab-panel .ct-next-label').textContent();
+    assert.match(txt, /Strofă/, `anunțul spune „${txt}”`);
+  });
+
+  await check('Structura nu pâlpâie când redarea stă pe loc', async () => {
+    await seek(10);
+    await page.evaluate(() => {
+      window.__structMut = 0;
+      const el = document.querySelector('#chordtab-panel .ct-structure');
+      window.__structObs = new MutationObserver((r) => { window.__structMut += r.length; });
+      window.__structObs.observe(el, { childList: true, subtree: true, characterData: true });
+    });
+    await page.waitForTimeout(1500);
+    const mut = await page.evaluate(() => { window.__structObs.disconnect(); return window.__structMut; });
+    assert.ok(mut <= 2, `${mut} modificări în structură cu redarea oprită — se reconstruiește degeaba`);
+  });
+
+  await check('Fără repetiții nu se afișează nicio structură', async () => {
+    const NOSTRUCT = 'noStructVideo';
+    const chords = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A']
+      .map((label, i) => ({ t: i * 5, label, confidence: 0.9 }));
+    await (await liveWorker()).evaluate(async ({ id, c }) => {
+      await chrome.storage.local.set({
+        [`chords:${id}`]: { version: 1, analyzedAt: new Date().toISOString(), capo: 0, chords: c },
+      });
+    }, { id: NOSTRUCT, c: chords });
+    await page.goto(`https://www.youtube.com/watch?v=${NOSTRUCT}`);
+    await page.locator('#chordtab-panel').waitFor({ state: 'attached', timeout: 15000 });
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === 'C',
+      null, { timeout: 10000 });
+    assert.equal(await page.locator('#chordtab-panel .ct-structure:visible').count(), 0,
+      'bara nu trebuie să apară fără structură');
+    assert.equal(await page.locator('#chordtab-panel .ct-section-now:visible').count(), 0,
+      'nici indicatorul de secțiune');
   });
 
   await check('Navigarea SPA resetează panoul', async () => {

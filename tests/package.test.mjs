@@ -6,7 +6,7 @@
 //
 // Nu testăm folderul de lucru, ci ARHIVA: dacă uităm un fișier la împachetare, aici se vede.
 
-import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -14,7 +14,10 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ZIP = join(ROOT, 'dist', 'chordtab-0.1.0.zip');
+// Versiunea se citește din manifest, nu se scrie în test: altfel testul se strică tăcut
+// la fiecare urcare de versiune și „trece” doar fiindcă sare peste tot.
+const { version } = JSON.parse(readFileSync(join(ROOT, 'extension', 'manifest.json'), 'utf8'));
+const ZIP = join(ROOT, 'dist', `chordtab-${version}.zip`);
 
 let chromium;
 try {

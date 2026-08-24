@@ -1,87 +1,76 @@
-# Verificare în Chrome — **Etapa 1 completă**
+# Verificare în Chrome — **structura melodiei (v0.2.0)**
 
 Document viu: descrie mereu ce e de verificat ACUM.
 
 ---
 
-## Ce s-a schimbat în ultima rundă
+## Ce e nou
 
-**Pâlpâitul e reparat.** Aveai dreptate că era ceva rău, și erau două cauze. Principala: caseta
-diagramei își schimba mărimea când n-avea ce arăta, ceea ce muta tot panoul, îți scotea cursorul
-de pe acord, diagrama revenea, panoul se muta la loc — de zeci de ori pe secundă. Acum caseta are
-mărime fixă, plină sau goală. Un test ține cursorul nemișcat o secundă și jumătate și numără
-schimbările; dacă trec de trei, cade.
+Funcția pe care ai cerut-o după Poarta 2: **tiparul pe secțiuni**.
 
-**Memoria e reparată.** Tot două bug-uri. Acordurile se salvau doar dacă apăsai explicit
-„Oprește" — un refresh în timpul analizei pierdea tot. Acum se salvează din mers. Iar al doilea,
-găsit scriind testul: citirea din memorie e asincronă și, dacă porneai analiza imediat după
-deschiderea paginii, memoria veche se scria peste analiza tocmai pornită.
+![Structura melodiei](capturi/panou-structura.png)
 
-**Culoarea** e acum albastrul din logo-ul tău, `#3058F0`.
+**Bara structurii** arată din ce e făcută melodia: fiecare segment e o secțiune, colorată pe
+grup. Click pe un segment și sari direct acolo — util când exersezi doar refrenul.
 
-**Drop D scos**, cum ai cerut.
+**Legenda** îți dă tiparul fiecărei secțiuni **o singură dată**: „A · Strofă: G D Am C, ×6".
+Asta ai cerut — nu un șir nesfârșit de acorduri pe care trebuie să le prinzi din zbor.
 
-**Logurile sunt stinse implicit** (Pasul 8) — consola rămâne curată pentru cine folosește
-extensia. Se pornesc din pagina de opțiuni când vrei să vezi ce se întâmplă.
+**Indicatorul** de lângă acord îți spune în ce secțiune ești acum („B · REFREN"), iar cu ~3
+secunde înainte de schimbare scrie „urmează: Strofă", ca să te pregătești.
 
-**Arhiva pentru comunitate** e gata (Pasul 9): `npm run build` face un `.zip` de 32 KB.
+Numirea e **prudentă cu intenție**: „Strofă" și „Refren" apar doar când tiparul alternanței e
+limpede. Altfel vezi doar litera (A, B, C). Un nume greșit ar fi mai rău decât unul neutru.
+
+Diagramele merg și în legendă — treci cu mouse-ul peste orice acord de acolo.
 
 ---
 
 ## Ce te rog să verifici
 
-Reload la extensie, apoi:
+Reload la extensie, apoi pe o melodie deja memorată (sau analizează una nouă un minut-două):
 
-1. **Pâlpâitul.** Pune melodia pe pauză și plimbă mouse-ul peste acordurile care urmează.
-   Trebuie să fie complet liniștit.
-2. **Memoria.** Analizează un minut, apoi dă refresh **fără să apeși Oprește**. Acordurile
-   trebuie să fie acolo, în modul „Acorduri memorate".
-3. **Derularea.** Sari prin melodie cu bara de progres — acordul trebuie să sară unde trebuie.
-4. **Culoarea și aspectul.** Spune-mi dacă albastrul e cel potrivit.
-5. **Diagramele.** Tu știi chitară — dacă vreo digitație nu e cea pe care o cânți, zi-mi care.
+1. **Apare bara?** Pe o melodie cu strofă și refren clare ar trebui să vezi segmente alternând.
+2. **Click pe un segment** te duce acolo în melodie?
+3. **Tiparele din legendă** sunt cele pe care le cânți? Aici e proba cea mai bună: tu știi
+   melodia, deci vezi imediat dacă „Strofă: G D Am C" e adevărat.
+4. **Indicatorul** se potrivește cu ce auzi? Când intri în refren, scrie „Refren"?
+5. Pe **melodia ta de la Fink** — care e aproape o singură buclă tot cântecul — te aștepți la
+   **o singură secțiune, fără nume**, cu ×mai multe. Ăsta e răspunsul corect, nu un bug:
+   melodia chiar e așa.
 
 ---
 
-## Ce înseamnă că Etapa 1 e completă
+## Ce să nu te sperie
 
-Tot ce era în plan e făcut și verificat:
+- Pe melodii fără structură clară (jazz, improvizație, un acord ținut), **bara nu apare deloc**.
+  E intenționat: mai bine nimic decât o structură inventată.
+- Dacă oprești analiza pe la jumătatea melodiei, structura acoperă doar ce s-a analizat.
+- Pe înregistrări live, cu tempo elastic, repetițiile se potrivesc mai slab.
+
+---
+
+## Starea proiectului
 
 | | Ce face | Cum e verificat |
 |---|---|---|
-| 0 | Motorul de detecție (FFT → chroma → acorduri) | 8/8 acorduri, la 44100 și 48000 Hz |
-| 1 | Captura audio fără să taie sunetul | manual, de tine |
-| 2 | Acordurile urmăresc melodia | manual, de tine |
-| 3 | Netezirea | 28% → 97% acuratețe, 51 → 4 schimbări |
-| 4 | Panoul | 15 verificări într-un Chromium real |
-| 5 | Memoria per melodie | idem, inclusiv refresh în timpul analizei |
-| 6 | Capo și transpoziție | idem |
-| 7 | Diagramele | 44 de digitații verificate muzical |
-| 8 | Logurile | consola tace cu debug oprit, vorbește cu el pornit |
-| 9 | Arhiva | dezarhivată și încărcată automat, ca un utilizator |
+| 0–3 | Detecția acordurilor + netezirea | 97% acuratețe pe semnal ostil |
+| 4–7 | Panou, memorie, capo, diagrame | Chromium real |
+| 8–9 | Loguri, arhivă | consolă curată; arhiva dezarhivată și încărcată automat |
+| **nou** | **Structura melodiei** | 10 grupuri de teste pe algoritm + 11 verificări de interfață |
 
-`npm test` rulează tot. `npm run test:package` verifică arhiva.
+`npm test` rulează tot (25 de verificări doar în interfață). `npm run test:package` verifică arhiva.
 
 ---
 
 ## Ce urmează
 
-**Ideea ta cu tiparul pe secțiuni** — strofă, refren, punte. Acum se poate face: avem cronologia
-completă în memorie, deci se pot căuta repetițiile.
-
-**Ăsta e momentul să treci pe Fable.** E funcție nouă, nu e în plan, și cere decizii pe care nu
-le poți lua din mers: ce înseamnă „o secțiune", cum decizi că două pasaje sunt același refren,
-ce faci când melodia nu se repetă curat. Pe Fable facem întâi planul, apoi îl execuți pe Opus —
-exact ritualul obișnuit.
-
-Până atunci, mai poți cere oricând ajustări de aspect sau reglaje — alea rămân clasă Opus.
+**Adversarialul pe toată extensia**, pe Fable — asta ai cerut. E momentul potrivit: extensia e
+completă funcțional, deci merită o privire rea, care caută ce s-a stricat pe drum.
 
 ---
 
 ## Unde te uiți dacă ceva crapă
 
-Pornește **Debug logging** din pagina de opțiuni, apoi:
-- **service worker** (`chrome://extensions` → *Inspect views: service worker*) — pornirea capturii
-- **offscreen.html** (apare doar cât captura e pornită) — analiza audio
-- **consola paginii YouTube** (F12) — panoul, memoria și redarea
-
-Toate mesajele încep cu `[ChordTab:...]`, deci le poți filtra scriind `ChordTab`.
+Pornește **Debug logging** din pagina de opțiuni. Mesajele încep cu `[ChordTab:...]`.
+Structura loghează la intrarea în modul memorat: câte secțiuni, câte tipare, ce acoperire.

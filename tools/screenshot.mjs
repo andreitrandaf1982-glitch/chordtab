@@ -19,16 +19,25 @@ const VIDEO_ID = 'demoVideo01';
 
 mkdirSync(OUT, { recursive: true });
 
-// Două melodii, ca să se vadă și cazul în care capo chiar ajută.
+// Trei melodii demonstrative.
+const LOOP_A = ['G', 'D', 'Am', 'C'];
+const LOOP_B = ['Em', 'C', 'G', 'D'];
 const DEMOS = {
   // „Knockin' on Heaven's Door” — deja în forme deschise, deci fără capo.
   [VIDEO_ID]: ['G', 'D', 'Am', 'G', 'D', 'C'],
   // „Wonderwall” — sună F#m A E B; cu capo 2 cânți Em G D A, adică numai forme deschise.
   wonderwallDemo: ['F#m', 'A', 'E', 'B', 'F#m', 'A'],
+  // Melodie cu structură: strofă ×4, refren ×2, strofă ×2, refren ×2.
+  structureDemo: [
+    ...LOOP_A, ...LOOP_A, ...LOOP_A, ...LOOP_A,
+    ...LOOP_B, ...LOOP_B,
+    ...LOOP_A, ...LOOP_A,
+    ...LOOP_B, ...LOOP_B,
+  ],
 };
-const timeline = (labels) => labels.map((label, i) => ({ t: i * 3, label, confidence: 0.88 }));
+const timeline = (labels) => labels.map((label, i) => ({ t: i * 2, label, confidence: 0.88 }));
 
-function silentWav(seconds = 30, sampleRate = 8000) {
+function silentWav(seconds = 120, sampleRate = 8000) {
   const data = seconds * sampleRate;
   const buf = Buffer.alloc(44 + data, 128);
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + data, 4); buf.write('WAVE', 8);
@@ -116,6 +125,19 @@ try {
   await page.waitForTimeout(600);
   await panel.screenshot({ path: join(OUT, 'panou-capo.png') });
   console.log('  docs/capturi/panou-capo.png');
+
+  // A treia captură: structura melodiei — bara secțiunilor și legenda cu tiparele.
+  await page.goto('https://www.youtube.com/watch?v=structureDemo');
+  await panel.waitFor({ state: 'attached', timeout: 15000 });
+  await page.waitForFunction(() => {
+    const v = document.querySelector('video');
+    return v && v.readyState >= 1;
+  }, null, { timeout: 15000 });
+  await page.locator('#chordtab-panel .ct-structure').waitFor({ state: 'visible', timeout: 10000 });
+  await page.evaluate(() => { document.querySelector('video').currentTime = 36; }); // în refren
+  await page.waitForTimeout(700);
+  await panel.screenshot({ path: join(OUT, 'panou-structura.png') });
+  console.log('  docs/capturi/panou-structura.png');
 } finally {
   await ctx?.close().catch(() => {});
   rmSync(profile, { recursive: true, force: true });

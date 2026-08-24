@@ -13,6 +13,7 @@ import { createLogger } from '../lib/logger.js';
 import { STR } from '../lib/strings.js';
 import { transposeChord, bestCapo, NO_CHORD } from '../lib/music-theory.js';
 import { renderChordDiagram, hasDiagram } from '../lib/diagrams.js';
+import { detectSections } from '../lib/sections.js';
 
 const log = createLogger('content');
 
@@ -20,6 +21,8 @@ const CACHE_VERSION = 1;
 const MAX_CAPO = 7;
 const UPCOMING_COUNT = 3;
 const RECENT_COUNT = 4;
+const MIN_COVERAGE = 0.5;   // sub atât, structura găsită e prea firavă ca s-o arătăm
+const ANNOUNCE_AHEAD = 3;   // cu câte secunde înainte anunțăm secțiunea următoare
 
 const state = {
   videoId: null,
@@ -29,10 +32,12 @@ const state = {
   suggestedCapo: 0,
   transpose: 0,       // schimbare de tonalitate cerută manual, în semitonuri
   analyzedAt: null,
+  structure: null,    // rezultatul lui detectSections — doar în modul „memorat”
   timeInterval: null,
   saveTimer: null,
   rafId: null,
   lastIndex: -1,
+  lastSection: -1,
 };
 
 const ui = {};
@@ -74,7 +79,7 @@ function onNavigate() {
   stopPlayback();
   Object.assign(state, {
     videoId: newId, mode: 'idle', chords: [], capo: 0, suggestedCapo: 0,
-    transpose: 0, analyzedAt: null, lastIndex: -1,
+    transpose: 0, analyzedAt: null, structure: null, lastIndex: -1, lastSection: -1,
   });
   buildPanel();
   loadCache();
@@ -178,7 +183,15 @@ function buildPanel() {
         <div class="ct-current" tabindex="0">${STR.noChordsYet}</div>
         <div class="ct-diagram-slot"></div>
       </div>
-      <div class="ct-next"><span class="ct-next-label"></span><span class="ct-next-list"></span></div>
+      <div class="ct-next">
+        <span class="ct-section-now" hidden></span>
+        <span class="ct-next-label"></span><span class="ct-next-list"></span>
+      </div>
+    </div>
+    <div class="ct-structure" hidden>
+      <span class="ct-group-label">${STR.structure}</span>
+      <div class="ct-bar"></div>
+      <div class="ct-legend"></div>
     </div>
     <div class="ct-controls">
       <div class="ct-group ct-capo-group">
@@ -207,6 +220,10 @@ function buildPanel() {
     capoHint: panel.querySelector('.ct-capo-hint'),
     trValue: panel.querySelector('.ct-tr-value'),
     diagramSlot: panel.querySelector('.ct-diagram-slot'),
+    structure: panel.querySelector('.ct-structure'),
+    bar: panel.querySelector('.ct-bar'),
+    legend: panel.querySelector('.ct-legend'),
+    sectionNow: panel.querySelector('.ct-section-now'),
   });
 
   ui.diagramKey = null;
@@ -266,6 +283,14 @@ function render() {
 
   if (mode === 'playback') renderPlayback();
   else renderLive();
+
+  buildStructure();
+  if (mode === 'playback') {
+    const video = getVideo();
+    updateCurrentSection(video ? video.currentTime : 0);
+  } else if (ui.sectionNow) {
+    ui.sectionNow.hidden = true;
+  }
 }
 
 function renderPlayback() {
@@ -320,6 +345,174 @@ function resetControls() {
   state.transpose = 0;
   state.capo = 0; // înapoi la acordurile care se aud cu adevărat
   render();
+}
+
+// --- Structura melodiei -------------------------------------------------------
+//
+// Există DOAR în modul „memorat”: repetițiile se văd numai privind melodia întreagă.
+// Bara se construiește O SINGURĂ DATĂ; în bucla de redare se schimbă doar clasa segmentului
+// curent. (Lecția pâlpâitului: nu reconstrui DOM sub cursor la fiecare cadru.)
+
+/** Numele de afișat al unei secțiuni: „B · Refren”, „Partea C”, „Intro” sau „Liber”. */
+function sectionLabel(s) {
+  const name = s.name ? STR.sectionNames[s.name] : null;
+  return s.cluster ? STR.sectionLabel(s.cluster, name) : STR.freeSection(name);
+}
+
+function computeStructure() {
+  if (!state.chords.length) { state.structure = null; return; }
+  const video = getVideo();
+  const videoEnd = video && Number.isFinite(video.duration) && video.duration > 0
+    ? video.duration
+    : Infinity;
+
+  // Analizăm doar CÂT ȘTIM, nu toată durata videoului. Dacă analiza a fost oprită devreme
+  // (sau melodia se termină înainte de finalul clipului), coada fără date ar apărea ca un
+  // segment gol uriaș — și, mai rău, ar dilua acoperirea sub pragul de afișare, ascunzând
+  // o structură perfect bună. Ultimul acord + o coadă cât o schimbare obișnuită.
+  const last = state.chords[state.chords.length - 1];
+  const gaps = [];
+  for (let i = 1; i < state.chords.length; i++) gaps.push(state.chords[i].t - state.chords[i - 1].t);
+  gaps.sort((a, b) => a - b);
+  const typical = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 4;
+  const duration = Math.min(videoEnd, last.t + Math.max(2, typical));
+
+  try {
+    state.structure = detectSections(state.chords, duration);
+    const groups = Object.keys(state.structure.patterns).length;
+    log.info(`Structură: ${state.structure.sections.length} secțiuni, ${groups} tipare, `
+      + `acoperire ${(state.structure.coverage * 100).toFixed(0)}%`);
+  } catch (err) {
+    log.error('Detecția structurii a eșuat:', err?.message || err);
+    state.structure = null;
+  }
+}
+
+function hasUsefulStructure() {
+  const st = state.structure;
+  return !!st && st.coverage >= MIN_COVERAGE && Object.keys(st.patterns).length > 0;
+}
+
+/** Construiește bara și legenda. Idempotent: dacă nimic relevant nu s-a schimbat, iese. */
+function buildStructure() {
+  if (!ui.structure) return;
+  if (state.mode !== 'playback' || !hasUsefulStructure()) {
+    ui.structure.hidden = true;
+    ui.barKey = null;
+    return;
+  }
+  const st = state.structure;
+  // Cheia include capo și transpoziția: etichetele din legendă trec prin displayLabel().
+  const key = `${state.videoId}|${state.capo}|${state.transpose}|${st.sections.length}`;
+  if (ui.barKey === key) return;
+  ui.barKey = key;
+  ui.structure.hidden = false;
+
+  const total = st.sections[st.sections.length - 1]?.end || 1;
+  const letters = Object.keys(st.patterns);
+
+  ui.bar.innerHTML = '';
+  st.sections.forEach((s, i) => {
+    const seg = document.createElement('button');
+    seg.type = 'button';
+    seg.className = 'ct-seg';
+    seg.dataset.index = String(i);
+    if (s.cluster) seg.dataset.group = String(letters.indexOf(s.cluster) % 5);
+    seg.style.flexGrow = String(Math.max(0.02, (s.end - s.start) / total));
+    seg.textContent = s.cluster || '';
+    const label = sectionLabel(s);
+    seg.title = STR.jumpTo(label);
+    seg.setAttribute('aria-label', STR.jumpTo(label));
+    seg.addEventListener('click', () => {
+      const video = getVideo();
+      if (video) video.currentTime = s.start + 0.05; // 0.05 ca să cădem SIGUR în secțiune
+    });
+    ui.bar.appendChild(seg);
+  });
+
+  // Legenda: fiecare grup o singură dată, cu tiparul și de câte ori apare în melodie.
+  ui.legend.innerHTML = '';
+  for (const letter of letters) {
+    const first = st.sections.find((s) => s.cluster === letter);
+    const reps = st.sections.filter((s) => s.cluster === letter)
+      .reduce((sum, s) => sum + s.reps, 0);
+    const row = document.createElement('div');
+    row.className = 'ct-legend-row';
+
+    const tag = document.createElement('span');
+    tag.className = 'ct-legend-tag';
+    tag.dataset.group = String(letters.indexOf(letter) % 5);
+    tag.textContent = sectionLabel(first || { cluster: letter, name: null });
+    row.appendChild(tag);
+
+    const chips = document.createElement('span');
+    chips.className = 'ct-legend-chips';
+    for (const item of st.patterns[letter].loop) {
+      const label = displayLabel(item.label);
+      const chip = document.createElement('span');
+      chip.className = 'ct-chip';
+      chip.textContent = label;
+      chip.dataset.chord = label;
+      chip.tabIndex = 0;
+      chip.classList.toggle('ct-has-diagram', hasDiagram(label));
+      attachChipHover(chip);
+      chips.appendChild(chip);
+    }
+    row.appendChild(chips);
+
+    const count = document.createElement('span');
+    count.className = 'ct-legend-count';
+    count.textContent = STR.times(reps);
+    row.appendChild(count);
+
+    ui.legend.appendChild(row);
+  }
+}
+
+/** Indexul secțiunii care conține momentul t (căutare binară). -1 dacă nu există. */
+function sectionIndexAt(t) {
+  const a = state.structure?.sections;
+  if (!a || !a.length) return -1;
+  let lo = 0, hi = a.length - 1, res = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (a[mid].start <= t) { res = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return res;
+}
+
+/** Pasul 2: doar clase și text — fără reconstrucție de DOM. */
+function updateCurrentSection(t) {
+  const st = state.structure;
+  if (!ui.sectionNow) return;
+  // Aceeași regulă ca la bară: dacă structura găsită e prea firavă, nu spunem nimic. Un
+  // indicator care scrie „Liber” toată melodia e zgomot, nu informație.
+  if (state.mode !== 'playback' || !hasUsefulStructure() || !st.sections.length) {
+    ui.sectionNow.hidden = true;
+    ui.nextLabel.classList.remove('is-announce');
+    return;
+  }
+  const idx = sectionIndexAt(t);
+  const current = idx >= 0 ? st.sections[idx] : null;
+
+  if (!ui.structure.hidden) {
+    for (const seg of ui.bar.children) {
+      seg.classList.toggle('is-current', Number(seg.dataset.index) === idx);
+    }
+  }
+
+  if (!current) { ui.sectionNow.hidden = true; return; }
+  ui.sectionNow.hidden = false;
+  ui.sectionNow.textContent = sectionLabel(current);
+  ui.sectionNow.dataset.group = current.cluster
+    ? String(Object.keys(st.patterns).indexOf(current.cluster) % 5)
+    : '';
+
+  // Anunțul secțiunii următoare, cu câteva secunde înainte de graniță.
+  const next = st.sections[idx + 1];
+  const soon = next && current.end - t <= ANNOUNCE_AHEAD;
+  ui.nextLabel.textContent = soon ? STR.upNextSection(sectionLabel(next)) : STR.upNext;
+  ui.nextLabel.classList.toggle('is-announce', !!soon);
 }
 
 // --- Diagrame (Pasul 7) -------------------------------------------------------
@@ -389,6 +582,8 @@ function startClock() {
   state.chords = [];
   state.capo = 0;
   state.suggestedCapo = 0;
+  state.structure = null; // structura ține de melodia memorată, nu de analiza în curs
+  state.lastSection = -1;
   clearInterval(state.timeInterval);
   state.timeInterval = setInterval(() => {
     const video = getVideo();
@@ -419,18 +614,38 @@ function stopClock() {
 function startPlayback() {
   state.mode = 'playback';
   state.lastIndex = -1;
+  state.lastSection = -1;
   stopPlayback(true);
+  computeStructure();
   const tick = () => {
     const video = getVideo();
     if (video) {
-      const idx = chordIndexAt(video.currentTime);
+      const t = video.currentTime;
+      const idx = chordIndexAt(t);
       if (idx !== state.lastIndex) { state.lastIndex = idx; render(); }
+      // Secțiunea și anunțul depind de TIMP, nu de schimbarea acordului, deci se verifică
+      // separat — dar scriem în DOM doar când chiar se schimbă ceva (bucla e la 60 fps).
+      const sIdx = sectionIndexAt(t);
+      const announce = shouldAnnounce(t, sIdx);
+      if (sIdx !== state.lastSection || announce !== state.lastAnnounce) {
+        state.lastSection = sIdx;
+        state.lastAnnounce = announce;
+        updateCurrentSection(t);
+      }
     }
     state.rafId = requestAnimationFrame(tick);
   };
   state.rafId = requestAnimationFrame(tick);
   log.info('Mod redare: urmăresc timpul videoului.');
   render();
+}
+
+/** Suntem aproape de granița secțiunii curente? (folosit ca să nu rescriem DOM degeaba) */
+function shouldAnnounce(t, sIdx) {
+  const st = state.structure;
+  if (!st || sIdx < 0) return false;
+  const current = st.sections[sIdx];
+  return !!st.sections[sIdx + 1] && current.end - t <= ANNOUNCE_AHEAD;
 }
 
 function stopPlayback(keepMode = false) {
