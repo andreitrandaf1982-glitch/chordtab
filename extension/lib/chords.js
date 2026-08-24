@@ -26,7 +26,7 @@ function buildTemplates() {
       intervals.forEach((iv, i) => { vec[(root + iv) % CHROMA_SIZE] = WEIGHTS[i]; });
       let norm = 0;
       for (const v of vec) norm += v * v;
-      out.push({ label: NOTES[root] + quality, vec, norm: Math.sqrt(norm) });
+      out.push({ label: NOTES[root] + quality, root, vec, norm: Math.sqrt(norm) });
     }
   }
   return out;
@@ -37,21 +37,41 @@ export const TEMPLATES = buildTemplates();
 /** Prag sub care spunem „nu e niciun acord clar” (N.C.). */
 export const DEFAULT_THRESHOLD = 0.6;
 
+/** Cât cântărește basul în decizie (0 = deloc, 1 = numai basul). */
+export const DEFAULT_BASS_WEIGHT = 0.3;
+
 /**
  * @param {Float64Array} chroma 12 valori (index 0 = C)
+ * @param {object} [opts]
+ * @param {Float64Array} [opts.bass] chroma calculată DOAR din registrul grav — nota de bas
+ *   spune de obicei care e fundamentala acordului. Fără ea, acordurile înrudite se confundă:
+ *   G (G-B-D) cu un F# trecător în melodie conține exact Bm (B-D-F#), iar detectorul alege
+ *   greșit. Basul pe G rezolvă ambiguitatea, fiindcă fundamentala se aude jos.
  * @returns {{label:string, score:number, runnerUp:string|null}}
  */
-export function matchChord(chroma, threshold = DEFAULT_THRESHOLD) {
+export function matchChord(chroma, opts = {}) {
+  const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
+  const bass = opts.bass ?? null;
+  const bassWeight = bass ? (opts.bassWeight ?? DEFAULT_BASS_WEIGHT) : 0;
+
   let norm = 0;
   for (const v of chroma) norm += v * v;
   norm = Math.sqrt(norm);
   if (norm === 0) return { label: NO_CHORD, score: 0, runnerUp: null };
 
+  let bassMax = 0;
+  if (bass) for (const v of bass) if (v > bassMax) bassMax = v;
+
   let best = null, second = null;
   for (const t of TEMPLATES) {
     let dot = 0;
     for (let i = 0; i < CHROMA_SIZE; i++) dot += chroma[i] * t.vec[i];
-    const score = dot / (norm * t.norm); // similaritate cosinus
+    const cosine = dot / (norm * t.norm);
+    // Media ponderată păstrează scorul în același interval ca similaritatea cosinus,
+    // deci pragul de N.C. rămâne comparabil cu și fără bas.
+    const bassSupport = bassMax > 0 ? bass[t.root] / bassMax : 0;
+    const score = (cosine + bassWeight * bassSupport) / (1 + bassWeight);
+
     if (!best || score > best.score) { second = best; best = { label: t.label, score }; }
     else if (!second || score > second.score) second = { label: t.label, score };
   }

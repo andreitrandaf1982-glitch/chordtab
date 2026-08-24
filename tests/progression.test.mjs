@@ -93,6 +93,7 @@ for (let ci = 1; ci < PROGRESSION.length; ci++) {
 console.log(`  Schimbări prinse în ±0,5s: ${delays.join(', ')} ✔`);
 
 // Măsură a zgomotului: câte evenimente peste minimul teoretic de 4.
-console.log(`  Evenimente emise: ${events.length} (minim teoretic 4) — Pasul 3 le va netezi`);
+assert.ok(events.length <= 6, `${events.length} evenimente pentru 4 acorduri — netezirea nu-și face treaba`);
+console.log(`  Evenimente emise: ${events.length} (minim teoretic 4) ✔`);
 
 console.log('progression.test.mjs: toate testele au trecut ✔');

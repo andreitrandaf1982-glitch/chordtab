@@ -54,6 +54,62 @@ export function spectralPeaks(mag, sampleRate, fftSize, opts = {}) {
   return peaks.slice(0, o.maxPeaks);
 }
 
+/** Poziția continuă a unei frecvențe pe scara de 12 clase (0 = C). */
+function pitchClassOf(freq) {
+  const midi = 69 + 12 * Math.log2(freq / 440);
+  return ((midi % 12) + 12) % 12;
+}
+
+/** Adaugă `weight` în jurul clasei `pc`, cu o fereastră cos² de lățime `2*half`. */
+function addAround(chroma, pc, weight, half) {
+  for (let b = 0; b < CHROMA_SIZE; b++) {
+    let d = Math.abs(pc - b);
+    if (d > 6) d = 12 - d; // distanță circulară
+    if (d >= half) continue;
+    const win = Math.cos((Math.PI / 2) * (d / half));
+    chroma[b] += weight * win * win;
+  }
+}
+
+/**
+ * Clasa de înălțime a NOTEI DE BAS: cea mai joasă notă care sună clar.
+ *
+ * Nu e totuna cu „chroma registrului grav”: într-un acord de Do cântat C3-E3-G3, tot registrul
+ * grav conține C, E și G, așa că Em primește la fel de mult sprijin ca C. Doar nota cea mai
+ * de jos spune care e fundamentala.
+ *
+ * @param {{freq:number, mag:number}[]} peaks vârfurile întregului spectru
+ */
+export function bassChroma(peaks, opts = {}) {
+  const o = { maxFreq: 400, relThreshold: 0.15, windowSemitones: 1.0, ...opts };
+  const out = new Float64Array(CHROMA_SIZE);
+  if (peaks.length === 0) return out;
+
+  let maxMag = 0;
+  for (const p of peaks) if (p.mag > maxMag) maxMag = p.mag;
+  const floor = maxMag * o.relThreshold;
+
+  let lowest = null;
+  for (const p of peaks) {
+    if (p.freq > o.maxFreq || p.mag < floor) continue;
+    if (!lowest || p.freq < lowest.freq) lowest = p;
+  }
+  if (!lowest) return out;
+
+  // Strângem și vârfurile din imediata vecinătate (±1 semiton): aceeași notă, cu jitter
+  // de interpolare sau ușor dezacordată.
+  let weight = 0;
+  for (const p of peaks) {
+    if (p.freq >= lowest.freq / 1.03 && p.freq <= lowest.freq * 1.03) weight += p.mag;
+  }
+  addAround(out, pitchClassOf(lowest.freq), weight, o.windowSemitones / 2);
+
+  let max = 0;
+  for (const v of out) if (v > max) max = v;
+  if (max > 0) for (let i = 0; i < CHROMA_SIZE; i++) out[i] /= max;
+  return out;
+}
+
 /**
  * Vârfuri -> vector chroma de 12 valori, normalizat la maxim 1. Index 0 = C.
  * @param {{freq:number, mag:number}[]} peaks
@@ -73,17 +129,8 @@ export function chromaFromPeaks(peaks, opts = {}, out) {
       if (f < o.minFreq) break;
       const w = energy * Math.pow(o.harmonicDecay, h - 1);
 
-      // Poziția continuă pe scara de 12 clase (MIDI 60 = C4, iar 60 % 12 = 0 => index 0 = C).
-      const midi = 69 + 12 * Math.log2(f / 440);
-      const pc = ((midi % 12) + 12) % 12;
-
-      for (let b = 0; b < CHROMA_SIZE; b++) {
-        let d = Math.abs(pc - b);
-        if (d > 6) d = 12 - d; // distanță circulară
-        if (d >= half) continue;
-        const win = Math.cos((Math.PI / 2) * (d / half));
-        chroma[b] += w * win * win;
-      }
+      // MIDI 60 = C4, iar 60 % 12 = 0 => index 0 = C.
+      addAround(chroma, pitchClassOf(f), w, half);
     }
   }
 

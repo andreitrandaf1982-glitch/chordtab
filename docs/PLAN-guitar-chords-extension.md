@@ -146,6 +146,35 @@ mai scurte se ignoră); acordurile identice consecutive se contopesc. Păstreaz�
 — A F#m D E), ≥70% din timpul melodiei afișează acordul corect (verificare manuală prin
 sondaj în 10 puncte ale melodiei, contra acordurilor cunoscute).
 
+> **REZULTAT PASUL 3 (2026-08-24, Opus) — implementat, verificat sintetic; Poarta 3 așteaptă
+> verificarea pe muzică reală.**
+>
+> Declanșator: la Poarta 2, Andrei a raportat că acordurile „se schimbă la fiecare sunet” și
+> „urmăresc linia melodică, nu acordul”. `tests/stability.test.mjs` reproduce exact asta —
+> progresie + melodie mai tare decât acordul, cu note din afara lui + percuție — și a măsurat
+> problema: **28,4% acuratețe, 51 de schimbări în 16s**.
+>
+> Netezirea are trei niveluri, nu unul:
+> 1. **medierea chroma pe ~1,2s** — un cadru durează 170 ms, adică o clipă, nu un acord;
+>    mediat, notele trecătoare și percuția se estompează, iar armonia care ține rămâne;
+> 2. **un candidat trebuie să câștige neîntrerupt ~0,45s** ca să fie comis;
+> 3. **datarea retroactivă** — acordul e datat cu momentul în care a început, nu cu cel în care
+>    ne-am convins (fereastra privește în urmă, deci scădem jumătate din ea). Contează la
+>    Pasul 5: în redarea din cache momentele trebuie să fie exacte.
+>
+> **A doua cauză, mai subtilă: confuzia între acorduri înrudite.** G cu un F# trecător în
+> melodie conține exact Bm (B-D-F#) — detectorul alegea Bm. Rezolvat muzical, nu statistic:
+> **nota de bas dă fundamentala** (pondere 0,3 în scor).
+> Atenție la capcana în care am căzut o dată: nu e „chroma registrului grav” — într-un Do
+> cântat C3-E3-G3, tot registrul grav conține C, E și G, deci Em primea la fel de mult sprijin.
+> Contează **cea mai joasă notă**, nu orice notă joasă (`bassChroma()` în `lib/chroma.js`).
+>
+> **Rezultat: 28,4% → 97,2% acuratețe, 51 → exact 4 schimbări.** Pragurile testului sunt
+> strânse la 90% / 6 schimbări, ca o regresie la reglaje să cadă zgomotos.
+>
+> Rămâne o **întârziere de ~0,5–1s în analiza live** — inevitabilă: stabilitatea cere context.
+> La redarea din cache (Pasul 5) dispare, fiindcă acolo avem cronologia completă.
+
 ### Pasul 4 — Panoul UI
 Panoul (deja injectat ca stub) afișează: acordul curent (mare), acordul următor (dacă e
 în cache), banda ultimelor ~8 acorduri, buton pornire/oprire, stare. Injectare: la începutul

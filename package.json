@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "test": "npm run test:unit && node tests/browser-selftest.mjs",
-    "test:unit": "node tests/music-theory.test.mjs && node tests/chord-detection.test.mjs && node tests/progression.test.mjs",
+    "test:unit": "node tests/music-theory.test.mjs && node tests/chord-detection.test.mjs && node tests/progression.test.mjs && node tests/stability.test.mjs",
     "test:browser": "node tests/browser-selftest.mjs"
   },
   "devDependencies": {
