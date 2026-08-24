@@ -1,0 +1,64 @@
+/* Panoul ChordTab — paleta: Ink #0B0F10, Paper #F4F2EC, Teal #1F8F87 / #12635D */
+
+#chordtab-panel {
+  background: #0b0f10;
+  color: #f4f2ec;
+  border: 1px solid #12635d;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-family: "Inter Tight", Roboto, Arial, sans-serif;
+}
+
+#chordtab-panel.chordtab-overlay {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  width: 280px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.chordtab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.chordtab-title {
+  font-weight: 700;
+  color: #1f8f87;
+  letter-spacing: 0.02em;
+}
+
+.chordtab-status {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.chordtab-current {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  color: #f4f2ec;
+  min-height: 52px;
+}
+
+.chordtab-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.chordtab-chip {
+  background: #12635d;
+  color: #f4f2ec;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 13px;
+  cursor: default;
+}

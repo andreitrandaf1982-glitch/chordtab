@@ -1,0 +1,6 @@
+# Secretele nu intră NICIODATĂ în git (lecția .env — vezi discuția de kickoff)
+.env
+.env.*
+
+node_modules/
+*.zip
