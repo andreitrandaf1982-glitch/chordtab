@@ -204,24 +204,6 @@ try {
     await page.click('#chordtab-panel .ct-reset');
   });
 
-  await check('Drop D: comutatorul de acordaj schimbă digitațiile', async () => {
-    await seek(1); // acordul G
-    // Numărul de degete rămâne 3 și în Drop D — se schimbă POZIȚIILE, deci comparăm desenul.
-    const drawing = () => slot().locator('svg').innerHTML();
-    const before = await drawing();
-    await page.click('#chordtab-panel .ct-tuning[data-tuning="dropD"]');
-    await page.waitForFunction(
-      () => /Drop D/.test(document.querySelector('#chordtab-panel .ct-d-capo')?.textContent || ''),
-      null, { timeout: 5000 });
-    assert.equal((await slot().locator('.ct-d-name').textContent()).trim(), 'G',
-      'acordul rămâne G — se schimbă doar cum îl prinzi, nu ce sună');
-    assert.notEqual(await drawing(), before, 'digitația lui G trebuie să difere în Drop D');
-    await page.click('#chordtab-panel .ct-tuning[data-tuning="standard"]');
-    await page.waitForFunction(
-      () => !document.querySelector('#chordtab-panel .ct-d-capo'),
-      null, { timeout: 5000 });
-  });
-
   await check('Pasul 7: hover pe un acord care urmează îi arată diagrama, apoi revine', async () => {
     await seek(1);
     await page.hover('#chordtab-panel .ct-chip >> nth=1'); // Am

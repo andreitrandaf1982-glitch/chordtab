@@ -177,8 +177,7 @@
   cursor: help;
 }
 
-.ct-capo-buttons,
-.ct-tuning-buttons { display: flex; gap: 3px; }
+.ct-capo-buttons { display: flex; gap: 3px; }
 
 .ct-btn {
   background: transparent;

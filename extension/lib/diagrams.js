@@ -55,45 +55,14 @@ const BARRE_SHAPES = {
   A: { '': [-1, 0, 2, 2, 2, 0], m: [-1, 0, 2, 2, 1, 0], 7: [-1, 0, 2, 0, 2, 0], m7: [-1, 0, 2, 0, 1, 0], maj7: [-1, 0, 2, 1, 2, 0], string: 5 },
 };
 
-/** Acordajele pe care le știm. `drop` = cu cât e coborâtă coarda 6 față de standard. */
-export const TUNINGS = {
-  standard: { label: 'Standard', drop: 0 },
-  dropD: { label: 'Drop D', drop: 2 },
-};
-
-/**
- * Traduce o formă din acordaj standard în Drop D.
- *
- * În Drop D, coarda 6 e coborâtă cu un ton, deci la aceeași poziție sună cu 2 semitonuri mai
- * jos. Ca să sune aceeași notă, o apeși cu 2 poziții mai sus. Restul corzilor nu se schimbă.
- * Dacă mutarea face acordul necântabil (întindere prea mare), e mai cinstit să muți coarda 6
- * decât să ceri imposibilul — oricum așa cântă lumea în practică.
- */
-function toDropD(frets) {
-  const out = frets.slice();
-  if (out[0] >= 0) {
-    const moved = out[0] + 2;
-    const others = out.slice(1).filter((f) => f > 0);
-    const span = others.length ? Math.max(moved, ...others) - Math.min(moved, ...others) : 0;
-    out[0] = span <= 3 ? moved : -1;
-  }
-  return out;
-}
-
 /**
  * Forma acordului: șase poziții + de unde începe bara (0 = fără bară).
- * @param {string} label
- * @param {'standard'|'dropD'} tuning
+ * Presupunem acordaj standard. Acordajele coborâte (drop D, drop C…) sunt prea multe și prea
+ * greu de ghicit din sunet ca să merite tratate: basul cântă în același registru, deci n-am
+ * putea deosebi o chitară coborâtă de un bas obișnuit.
  * @returns {{frets:number[], barre:number, baseFret:number}|null}
  */
-export function chordShape(label, tuning = 'standard') {
-  const shape = standardShape(label);
-  if (!shape || tuning === 'standard') return shape;
-  const frets = toDropD(shape.frets);
-  return { frets, barre: barreOf(label, frets), baseFret: shape.baseFret };
-}
-
-function standardShape(label) {
+export function chordShape(label) {
   const open = OPEN_SHAPES[label];
   if (open) return { frets: open.slice(), barre: barreOf(label, open), baseFret: 1 };
 
@@ -127,18 +96,17 @@ function barreOf(label, frets) {
   return atMin >= 3 ? min : 0;
 }
 
-export function hasDiagram(label, tuning = 'standard') {
-  return !!chordShape(label, tuning);
+export function hasDiagram(label) {
+  return !!chordShape(label);
 }
 
 /**
  * Diagrama ca SVG, gata de pus în pagină.
  * @param {string} label acordul AȘA CUM SE CÂNTĂ (deja transpus, dacă e cazul)
  * @param {number} capo poziția capo, doar ca să apară scris pe diagramă
- * @param {'standard'|'dropD'} tuning acordajul chitarei
  */
-export function renderChordDiagram(label, capo = 0, tuning = 'standard') {
-  const shape = chordShape(label, tuning);
+export function renderChordDiagram(label, capo = 0) {
+  const shape = chordShape(label);
   if (!shape) return null;
 
   const { frets, barre } = shape;
@@ -195,11 +163,8 @@ export function renderChordDiagram(label, capo = 0, tuning = 'standard') {
     parts.push(`<circle cx="${x(s)}" cy="${y(row) + rh / 2}" r="6.5" class="ct-d-dot"/>`);
   });
 
-  const notes = [];
-  if (capo > 0) notes.push(`capo ${capo}`);
-  if (tuning !== 'standard') notes.push(TUNINGS[tuning]?.label ?? tuning);
-  const caption = notes.length
-    ? `<text x="${W / 2}" y="${H - 6}" class="ct-d-capo" text-anchor="middle">${escapeHtml(notes.join(' · '))}</text>`
+  const caption = capo > 0
+    ? `<text x="${W / 2}" y="${H - 6}" class="ct-d-capo" text-anchor="middle">capo ${capo}</text>`
     : '';
 
   return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="ct-diagram" role="img" aria-label="Diagrama acordului ${escapeHtml(label)}">${parts.join('')}${caption}</svg>`;

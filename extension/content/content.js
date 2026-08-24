@@ -12,7 +12,7 @@
 import { createLogger } from '../lib/logger.js';
 import { STR } from '../lib/strings.js';
 import { transposeChord, bestCapo, NO_CHORD } from '../lib/music-theory.js';
-import { renderChordDiagram, hasDiagram, TUNINGS } from '../lib/diagrams.js';
+import { renderChordDiagram, hasDiagram } from '../lib/diagrams.js';
 
 const log = createLogger('content');
 
@@ -27,7 +27,6 @@ const state = {
   chords: [],         // { t, label, confidence } — sortate după t
   capo: 0,            // poziția capo aleasă (0 = fără)
   suggestedCapo: 0,
-  tuning: 'standard', // acordajul chitarei (schimba digitatiile din diagrame)
   transpose: 0,       // schimbare de tonalitate cerută manual, în semitonuri
   analyzedAt: null,
   timeInterval: null,
@@ -187,10 +186,6 @@ function buildPanel() {
         <span class="ct-capo-buttons"></span>
         <span class="ct-capo-hint"></span>
       </div>
-      <div class="ct-group ct-tuning-group">
-        <span class="ct-group-label" title="${STR.tuningHelp}">${STR.tuning}</span>
-        <span class="ct-tuning-buttons"></span>
-      </div>
       <div class="ct-group">
         <span class="ct-group-label" title="${STR.transposeHelp}">${STR.transpose}</span>
         <button class="ct-btn ct-tr-down" type="button">−</button>
@@ -210,7 +205,6 @@ function buildPanel() {
     nextList: panel.querySelector('.ct-next-list'),
     capoButtons: panel.querySelector('.ct-capo-buttons'),
     capoHint: panel.querySelector('.ct-capo-hint'),
-    tuningButtons: panel.querySelector('.ct-tuning-buttons'),
     trValue: panel.querySelector('.ct-tr-value'),
     diagramSlot: panel.querySelector('.ct-diagram-slot'),
   });
@@ -220,9 +214,8 @@ function buildPanel() {
   ui.action.addEventListener('click', onActionClick);
   panel.querySelector('.ct-tr-down').addEventListener('click', () => nudgeTranspose(-1));
   panel.querySelector('.ct-tr-up').addEventListener('click', () => nudgeTranspose(1));
-  panel.querySelector('.ct-reset').addEventListener('click', resetTuning);
+  panel.querySelector('.ct-reset').addEventListener('click', resetControls);
   buildCapoButtons();
-  buildTuningButtons();
 
   // Îl atașăm imediat (overlay) ca să fie vizibil din prima, apoi îl mutăm sub video
   // când #below apare. Dacă nu apare deloc, rămâne overlay — comportamentul de rezervă.
@@ -251,24 +244,6 @@ function buildCapoButtons() {
   }
 }
 
-function buildTuningButtons() {
-  ui.tuningButtons.innerHTML = '';
-  for (const [key, t] of Object.entries(TUNINGS)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'ct-btn ct-tuning';
-    b.dataset.tuning = key;
-    b.textContent = t.label;
-    b.addEventListener('click', () => {
-      state.tuning = key;
-      ui.diagramKey = null; // forțăm redesenarea: aceeași etichetă, alte digitații
-      ui.chipKey = null;
-      render();
-    });
-    ui.tuningButtons.appendChild(b);
-  }
-}
-
 function render() {
   const { mode } = state;
   ui.status.classList.remove('is-warning');
@@ -287,9 +262,6 @@ function render() {
     b.classList.toggle('is-suggested',
       state.chords.length > 0 && state.suggestedCapo > 0
       && Number(b.dataset.capo) === state.suggestedCapo);
-  }
-  for (const b of ui.tuningButtons.children) {
-    b.classList.toggle('is-active', b.dataset.tuning === state.tuning);
   }
 
   if (mode === 'playback') renderPlayback();
@@ -333,7 +305,7 @@ function fillChordList(soundingLabels) {
     chip.textContent = label;
     chip.dataset.chord = label;
     chip.tabIndex = 0;
-    chip.classList.toggle('ct-has-diagram', hasDiagram(label, state.tuning));
+    chip.classList.toggle('ct-has-diagram', hasDiagram(label));
     attachChipHover(chip);
     ui.nextList.appendChild(chip);
   }
@@ -344,7 +316,7 @@ function nudgeTranspose(delta) {
   render();
 }
 
-function resetTuning() {
+function resetControls() {
   state.transpose = 0;
   state.capo = 0; // înapoi la acordurile care se aud cu adevărat
   render();
@@ -363,10 +335,10 @@ function resetTuning() {
 function showDiagram(label) {
   if (!ui.diagramSlot) return;
   const wanted = label && label !== NO_CHORD && label !== STR.noChordsYet ? label : null;
-  const key = `${wanted}|${state.capo}|${state.tuning}`;
+  const key = `${wanted}|${state.capo}`;
   if (ui.diagramKey === key) return; // deja e pe ecran — nu atingem DOM-ul degeaba
   ui.diagramKey = key;
-  const svg = wanted ? renderChordDiagram(wanted, state.capo, state.tuning) : null;
+  const svg = wanted ? renderChordDiagram(wanted, state.capo) : null;
   ui.diagramSlot.innerHTML = svg || '';
   ui.diagramSlot.classList.toggle('is-empty', !svg);
 }
