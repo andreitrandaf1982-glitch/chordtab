@@ -26,6 +26,9 @@ export const STR = {
   noCapo: 'fără',
   // Când sugestia e „fără”, butonul aprins spune deja totul — nu repetăm.
   capoSuggested: (n) => (n === 0 ? '' : `sugerat: ${n}`),
+  tuning: 'Acordaj',
+  tuningHelp: 'Schimbă digitațiile pentru chitare acordate altfel. Nu putem ghici acordajul din '
+    + 'sunet — basul cântă în același registru — deci alegi tu.',
   transpose: 'Ton',
   transposeValue: (n) => (n === 0 ? '0' : n > 0 ? `+${n}` : `${n}`),
   reset: 'Resetează',

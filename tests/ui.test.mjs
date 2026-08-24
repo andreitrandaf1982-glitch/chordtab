@@ -75,8 +75,13 @@ try {
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   });
 
-  const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent('serviceworker', { timeout: 20000 }));
-  const extId = new URL(sw.url()).host;
+  const first = ctx.serviceWorkers()[0] || (await ctx.waitForEvent('serviceworker', { timeout: 20000 }));
+  const extId = new URL(first.url()).host;
+
+  // Service worker-ul MV3 se oprește singur când e inactiv și repornește la nevoie, deci o
+  // referință veche devine inutilizabilă. O luăm proaspătă de fiecare dată.
+  const liveWorker = async () =>
+    ctx.serviceWorkers()[0] || (await ctx.waitForEvent('serviceworker', { timeout: 20000 }));
 
   // Punem cronologia în memoria extensiei, ca și cum melodia ar fi fost deja analizată.
   const seeder = await ctx.newPage();
@@ -195,8 +200,26 @@ try {
     await page.waitForFunction(
       () => document.querySelector('#chordtab-panel .ct-d-name')?.textContent?.trim() === 'E',
       null, { timeout: 5000 });
-    assert.match(await slot().locator('.ct-d-capo').textContent(), /capo pe 3/);
+    assert.match(await slot().locator('.ct-d-capo').textContent(), /capo 3/);
     await page.click('#chordtab-panel .ct-reset');
+  });
+
+  await check('Drop D: comutatorul de acordaj schimbă digitațiile', async () => {
+    await seek(1); // acordul G
+    // Numărul de degete rămâne 3 și în Drop D — se schimbă POZIȚIILE, deci comparăm desenul.
+    const drawing = () => slot().locator('svg').innerHTML();
+    const before = await drawing();
+    await page.click('#chordtab-panel .ct-tuning[data-tuning="dropD"]');
+    await page.waitForFunction(
+      () => /Drop D/.test(document.querySelector('#chordtab-panel .ct-d-capo')?.textContent || ''),
+      null, { timeout: 5000 });
+    assert.equal((await slot().locator('.ct-d-name').textContent()).trim(), 'G',
+      'acordul rămâne G — se schimbă doar cum îl prinzi, nu ce sună');
+    assert.notEqual(await drawing(), before, 'digitația lui G trebuie să difere în Drop D');
+    await page.click('#chordtab-panel .ct-tuning[data-tuning="standard"]');
+    await page.waitForFunction(
+      () => !document.querySelector('#chordtab-panel .ct-d-capo'),
+      null, { timeout: 5000 });
   });
 
   await check('Pasul 7: hover pe un acord care urmează îi arată diagrama, apoi revine', async () => {
@@ -217,6 +240,89 @@ try {
     assert.ok(d && capo, 'ambele zone trebuie să fie vizibile');
     assert.ok(d.y + d.height <= capo.y + 1,
       `diagrama (până la ${Math.round(d.y + d.height)}px) intră peste controale (de la ${Math.round(capo.y)}px)`);
+  });
+
+  // --- Pâlpâitul raportat de Andrei: hover pe un acord făcea tot ecranul să clipească ---
+  await check('Hover pe un acord nu produce pâlpâit', async () => {
+    await seek(1);
+    await page.evaluate(() => {
+      window.__mutations = 0;
+      const slot = document.querySelector('#chordtab-panel .ct-diagram-slot');
+      window.__obs = new MutationObserver((recs) => { window.__mutations += recs.length; });
+      window.__obs.observe(slot, { childList: true, subtree: true, attributes: true });
+    });
+    await page.hover('#chordtab-panel .ct-chip >> nth=0');
+    await page.waitForTimeout(1500); // stăm pe loc: nimic nu trebuie să se mai schimbe
+    const mutations = await page.evaluate(() => { window.__obs.disconnect(); return window.__mutations; });
+    // O singură schimbare (înlocuirea diagramei) e normală. Zeci înseamnă buclă.
+    assert.ok(mutations <= 3, `${mutations} modificări ale diagramei cât timp cursorul stă pe loc — pâlpâie`);
+  });
+
+  await check('Slotul diagramei nu-și schimbă mărimea (sursa pâlpâitului)', async () => {
+    await seek(1);
+    const full = await page.locator('#chordtab-panel .ct-diagram-slot').boundingBox();
+    // Golim slotul, ca la un acord fără diagramă, și verificăm că mărimea rămâne.
+    await page.evaluate(() => {
+      const s = document.querySelector('#chordtab-panel .ct-diagram-slot');
+      s.innerHTML = ''; s.classList.add('is-empty');
+    });
+    const empty = await page.locator('#chordtab-panel .ct-diagram-slot').boundingBox();
+    assert.equal(Math.round(empty.width), Math.round(full.width), 'lățimea slotului trebuie să rămână');
+    assert.equal(Math.round(empty.height), Math.round(full.height), 'înălțimea slotului trebuie să rămână');
+    await page.reload();
+    await page.locator('#chordtab-panel').waitFor({ state: 'attached', timeout: 15000 });
+  });
+
+  // --- Memoria: acordurile găsite în timpul analizei trebuie să supraviețuiască unui refresh ---
+  await check('Pasul 5: acordurile se salvează din mers, nu doar la oprire', async () => {
+    const live = [
+      { t: 0, label: 'E', confidence: 0.8 },
+      { t: 3, label: 'B', confidence: 0.8 },
+      { t: 6, label: 'C#m', confidence: 0.8 },
+      { t: 9, label: 'A', confidence: 0.8 },
+    ];
+    const panelState = () => page.evaluate(() => ({
+      status: document.querySelector('#chordtab-panel .ct-status')?.textContent,
+      current: document.querySelector('#chordtab-panel .ct-current')?.textContent,
+    }));
+    const waitFor = async (label, fn) => {
+      try { await page.waitForFunction(fn, null, { timeout: 10000 }); }
+      catch { throw new Error(`${label} — panoul arată ${JSON.stringify(await panelState())}`); }
+    };
+
+    // Așteptăm ca încărcarea din memorie să se așeze, ca să nu confundăm cele două stări.
+    await waitFor('nu a intrat în modul memorat înainte de analiză',
+      () => /memorate/i.test(document.querySelector('#chordtab-panel .ct-status')?.textContent || ''));
+
+    // Jucăm rolul background-ului: pornim „ascultarea” și trimitem acorduri, fără să oprim.
+    await (await liveWorker()).evaluate(async ({ videoId, chords }) => {
+      const tabs = await chrome.tabs.query({});
+      const send = async (m) => {
+        for (const t of tabs) { try { await chrome.tabs.sendMessage(t.id, m); } catch { /* alt tab */ } }
+      };
+      await send({ target: 'content', type: 'CAPTURE_STATE', capturing: true });
+      for (const c of chords) await send({ target: 'content', type: 'CHORD_EVENT', videoId, ...c });
+    }, { videoId: VIDEO_ID, chords: live });
+
+    // Panoul trebuie să treacă în „ascult” și să arate ultimul acord primit.
+    await waitFor('nu a ajuns la acordul A după CHORD_EVENT',
+      () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === 'A');
+
+    // Salvarea e amânată 3s ca să nu scriem la fiecare acord.
+    await page.waitForTimeout(4000);
+
+    const saved = await (await liveWorker()).evaluate(async (id) => (await chrome.storage.local.get(`chords:${id}`))[`chords:${id}`], VIDEO_ID);
+    assert.ok(saved, 'nimic în memorie după analiză');
+    assert.deepEqual(saved.chords.map((c) => c.label), ['E', 'B', 'C#m', 'A'],
+      `în memorie au ajuns alte acorduri: ${JSON.stringify(saved.chords.map((c) => c.label))}`);
+
+    // Refresh FĂRĂ să fi apăsat vreodată „Oprește” — exact scenariul care pierdea totul.
+    await page.reload();
+    await page.locator('#chordtab-panel').waitFor({ state: 'attached', timeout: 15000 });
+    await waitFor('după refresh nu arată E din memoria proaspătă',
+      () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === 'E');
+    const status = await page.locator('#chordtab-panel .ct-status').textContent();
+    assert.match(status, /memorate/i, `după refresh aștept modul memorat, am „${status}”`);
   });
 
   await check('Navigarea SPA resetează panoul', async () => {

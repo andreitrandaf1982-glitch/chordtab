@@ -1,15 +1,16 @@
-/* Panoul ChordTab. Paleta proiectului: Ink #0B0F10, Paper #F4F2EC, Teal #1F8F87 / #12635D.
+/* Panoul ChordTab. Culoarea de accent e albastrul din logo-ul „Not a coder”: #3058F0.
    Toate clasele au prefix .ct- ca să nu se ciocnească de stilurile YouTube. */
 
 #chordtab-panel {
   --ct-ink: #0b0f10;
   --ct-paper: #f4f2ec;
-  --ct-teal: #1f8f87;
-  --ct-teal-dark: #12635d;
+  --ct-blue: #3058f0;        /* albastrul de brand */
+  --ct-blue-bright: #4f74ff; /* pentru hover */
+  --ct-blue-dark: #1e3ab0;   /* borduri și fundaluri de chip */
 
   background: var(--ct-ink);
   color: var(--ct-paper);
-  border: 1px solid var(--ct-teal-dark);
+  border: 1px solid var(--ct-blue-dark);
   border-radius: 14px;
   padding: 14px 18px 16px;
   margin: 12px 0;
@@ -37,7 +38,7 @@
 
 .ct-title {
   font-weight: 700;
-  color: var(--ct-teal);
+  color: var(--ct-blue);
   letter-spacing: 0.02em;
 }
 
@@ -54,7 +55,7 @@
 }
 
 .ct-action {
-  background: var(--ct-teal);
+  background: var(--ct-blue);
   color: var(--ct-paper);
   border: 0;
   border-radius: 8px;
@@ -66,7 +67,7 @@
   white-space: nowrap;
 }
 
-.ct-action:hover { background: #26a79d; }
+.ct-action:hover { background: var(--ct-blue-bright); }
 
 /* --- acordul curent + ce urmează --- */
 
@@ -94,18 +95,23 @@
   cursor: default;
 }
 
-/* Diagrama acordului curent — mereu vizibilă, nu la hover. */
+/* Diagrama acordului curent — mereu vizibilă, nu la hover.
+   DIMENSIUNE FIXĂ, și plină și goală: dacă slotul s-ar micșora când nu are ce arăta, panoul
+   s-ar rearanja, cursorul ar ieși de pe acordul pe care stă, diagrama ar reveni, panoul s-ar
+   muta la loc — bucla asta era pâlpâitul raportat. Nu scoate width/height de aici. */
 .ct-diagram-slot {
+  box-sizing: border-box;
+  width: 120px;
+  height: 138px;
+  flex: 0 0 auto;
   background: var(--ct-paper);
   border-radius: 10px;
   padding: 4px 6px;
   line-height: 0;
+  transition: background-color 120ms linear;
 }
 
-.ct-diagram-slot.is-empty {
-  background: none;
-  padding: 0;
-}
+.ct-diagram-slot.is-empty { background: transparent; }
 
 .ct-diagram {
   display: block;
@@ -138,8 +144,8 @@
 }
 
 .ct-chip {
-  background: rgba(31, 143, 135, 0.22);
-  border: 1px solid var(--ct-teal-dark);
+  background: rgba(48, 88, 240, 0.22);
+  border: 1px solid var(--ct-blue-dark);
   color: var(--ct-paper);
   border-radius: 7px;
   padding: 3px 10px;
@@ -171,7 +177,8 @@
   cursor: help;
 }
 
-.ct-capo-buttons { display: flex; gap: 3px; }
+.ct-capo-buttons,
+.ct-tuning-buttons { display: flex; gap: 3px; }
 
 .ct-btn {
   background: transparent;
@@ -185,14 +192,14 @@
   min-width: 26px;
 }
 
-.ct-btn:hover { border-color: var(--ct-teal); }
+.ct-btn:hover { border-color: var(--ct-blue); }
 
-.ct-capo.is-suggested { border-color: var(--ct-teal); }
+.ct-capo.is-suggested { border-color: var(--ct-blue); }
 
 .ct-capo.is-active,
 .ct-btn.is-active {
-  background: var(--ct-teal);
-  border-color: var(--ct-teal);
+  background: var(--ct-blue);
+  border-color: var(--ct-blue);
   font-weight: 700;
 }
 
@@ -217,7 +224,7 @@
 .ct-d-fret, .ct-d-capo { fill: #5b6668; font-size: 11px; }
 .ct-d-string, .ct-d-fretline { stroke: #9aa3a4; stroke-width: 1.2; }
 .ct-d-nut { fill: #0b0f10; }
-.ct-d-capo-bar { fill: #1f8f87; }
+.ct-d-capo-bar { fill: #3058f0; }
 .ct-d-mark { fill: #5b6668; font-size: 13px; }
 .ct-d-open { fill: none; stroke: #5b6668; stroke-width: 1.4; }
-.ct-d-dot, .ct-d-barre { fill: #12635d; }
+.ct-d-dot, .ct-d-barre { fill: #3058f0; }

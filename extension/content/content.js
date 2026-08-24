@@ -12,7 +12,7 @@
 import { createLogger } from '../lib/logger.js';
 import { STR } from '../lib/strings.js';
 import { transposeChord, bestCapo, NO_CHORD } from '../lib/music-theory.js';
-import { renderChordDiagram, hasDiagram } from '../lib/diagrams.js';
+import { renderChordDiagram, hasDiagram, TUNINGS } from '../lib/diagrams.js';
 
 const log = createLogger('content');
 
@@ -27,9 +27,11 @@ const state = {
   chords: [],         // { t, label, confidence } — sortate după t
   capo: 0,            // poziția capo aleasă (0 = fără)
   suggestedCapo: 0,
+  tuning: 'standard', // acordajul chitarei (schimba digitatiile din diagrame)
   transpose: 0,       // schimbare de tonalitate cerută manual, în semitonuri
   analyzedAt: null,
   timeInterval: null,
+  saveTimer: null,
   rafId: null,
   lastIndex: -1,
 };
@@ -44,6 +46,10 @@ function init() {
   state.videoId = getVideoId();
   buildPanel();
   window.addEventListener('yt-navigate-finish', onNavigate);
+  // Ultima șansă de salvare la închiderea paginii. E doar o plasă: scrierea în storage e
+  // asincronă și s-ar putea să nu apuce. De aceea salvarea din mers, de mai sus, e cea care
+  // contează cu adevărat.
+  window.addEventListener('pagehide', () => { if (state.mode === 'listening') saveCache(); });
   chrome.runtime.onMessage.addListener(onMessage);
   log.info('ChordTab activ. videoId =', state.videoId);
   loadCache();
@@ -87,12 +93,21 @@ async function loadCache() {
     const key = cacheKey();
     const stored = (await chrome.storage.local.get(key))[key];
     if (!stored || stored.version !== CACHE_VERSION || !stored.chords?.length) return;
+    // Citirea din memorie e asincronă. Dacă între timp a pornit o analiză nouă, ea are
+    // prioritate — altfel am șterge exact acordurile care tocmai se strâng.
+    if (state.mode === 'listening') {
+      log.debug('Analiza a pornit între timp — nu încarc memoria peste ea.');
+      return;
+    }
     state.chords = stored.chords;
     state.analyzedAt = stored.analyzedAt;
     // Recalculăm sugestia din acorduri în loc s-o credem pe cea salvată: e ieftin și rămâne
     // corectă chiar dacă memoria a fost scrisă de o versiune mai veche sau din afară.
     state.suggestedCapo = bestCapo(stored.chords.map((c) => c.label), MAX_CAPO).capo;
-    state.capo = state.suggestedCapo;
+    // NU o aplicăm singuri: pornim de la acordurile care se aud cu adevărat. Un capo aplicat
+    // din oficiu ar arăta „D” la o melodie care sună „E”, ceea ce derutează pe cineva care
+    // n-are capo la îndemână. Sugestia e doar marcată pe buton, la un click distanță.
+    state.capo = 0;
     log.info(`Am găsit ${stored.chords.length} acorduri memorate pentru ${state.videoId}.`);
     startPlayback();
   } catch (err) {
@@ -100,7 +115,17 @@ async function loadCache() {
   }
 }
 
+// Salvăm din mers, nu doar la oprire. Altfel un refresh sau o navigare în timpul analizei
+// pierde tot ce s-a găsit: content scriptul moare înainte să apuce să scrie, iar mesajul de
+// oprire trimis de background ajunge la o pagină care nu mai există. Ăsta era motivul pentru
+// care acordurile nu reapăreau după refresh.
+function scheduleSave() {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(() => { saveCache(); }, 3000);
+}
+
 async function saveCache() {
+  clearTimeout(state.saveTimer);
   if (!state.videoId || state.chords.length < 2) return;
   try {
     const suggestion = bestCapo(state.chords.map((c) => c.label), MAX_CAPO);
@@ -162,6 +187,10 @@ function buildPanel() {
         <span class="ct-capo-buttons"></span>
         <span class="ct-capo-hint"></span>
       </div>
+      <div class="ct-group ct-tuning-group">
+        <span class="ct-group-label" title="${STR.tuningHelp}">${STR.tuning}</span>
+        <span class="ct-tuning-buttons"></span>
+      </div>
       <div class="ct-group">
         <span class="ct-group-label" title="${STR.transposeHelp}">${STR.transpose}</span>
         <button class="ct-btn ct-tr-down" type="button">−</button>
@@ -181,16 +210,19 @@ function buildPanel() {
     nextList: panel.querySelector('.ct-next-list'),
     capoButtons: panel.querySelector('.ct-capo-buttons'),
     capoHint: panel.querySelector('.ct-capo-hint'),
+    tuningButtons: panel.querySelector('.ct-tuning-buttons'),
     trValue: panel.querySelector('.ct-tr-value'),
     diagramSlot: panel.querySelector('.ct-diagram-slot'),
   });
 
+  ui.diagramKey = null;
+  ui.chipKey = null;
   ui.action.addEventListener('click', onActionClick);
   panel.querySelector('.ct-tr-down').addEventListener('click', () => nudgeTranspose(-1));
   panel.querySelector('.ct-tr-up').addEventListener('click', () => nudgeTranspose(1));
   panel.querySelector('.ct-reset').addEventListener('click', resetTuning);
   buildCapoButtons();
-  wireDiagramPreview(panel);
+  buildTuningButtons();
 
   // Îl atașăm imediat (overlay) ca să fie vizibil din prima, apoi îl mutăm sub video
   // când #below apare. Dacă nu apare deloc, rămâne overlay — comportamentul de rezervă.
@@ -219,6 +251,24 @@ function buildCapoButtons() {
   }
 }
 
+function buildTuningButtons() {
+  ui.tuningButtons.innerHTML = '';
+  for (const [key, t] of Object.entries(TUNINGS)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ct-btn ct-tuning';
+    b.dataset.tuning = key;
+    b.textContent = t.label;
+    b.addEventListener('click', () => {
+      state.tuning = key;
+      ui.diagramKey = null; // forțăm redesenarea: aceeași etichetă, alte digitații
+      ui.chipKey = null;
+      render();
+    });
+    ui.tuningButtons.appendChild(b);
+  }
+}
+
 function render() {
   const { mode } = state;
   ui.status.classList.remove('is-warning');
@@ -235,7 +285,11 @@ function render() {
   for (const b of ui.capoButtons.children) {
     b.classList.toggle('is-active', Number(b.dataset.capo) === state.capo);
     b.classList.toggle('is-suggested',
-      state.chords.length > 0 && Number(b.dataset.capo) === state.suggestedCapo);
+      state.chords.length > 0 && state.suggestedCapo > 0
+      && Number(b.dataset.capo) === state.suggestedCapo);
+  }
+  for (const b of ui.tuningButtons.children) {
+    b.classList.toggle('is-active', b.dataset.tuning === state.tuning);
   }
 
   if (mode === 'playback') renderPlayback();
@@ -266,15 +320,21 @@ function setCurrent(sounding) {
 }
 
 function fillChordList(soundingLabels) {
+  const labels = soundingLabels.map(displayLabel);
+  // Reconstruim lista DOAR dacă s-a schimbat. Altfel, ștergerea și recrearea chip-urilor sub
+  // cursor stinge și reaprinde evenimentele de hover — a doua sursă de pâlpâit.
+  if (ui.chipKey === labels.join('|')) return;
+  ui.chipKey = labels.join('|');
+
   ui.nextList.innerHTML = '';
-  for (const s of soundingLabels) {
-    const label = displayLabel(s);
+  for (const label of labels) {
     const chip = document.createElement('span');
     chip.className = 'ct-chip';
     chip.textContent = label;
     chip.dataset.chord = label;
     chip.tabIndex = 0;
-    chip.classList.toggle('ct-has-diagram', hasDiagram(label));
+    chip.classList.toggle('ct-has-diagram', hasDiagram(label, state.tuning));
+    attachChipHover(chip);
     ui.nextList.appendChild(chip);
   }
 }
@@ -286,7 +346,7 @@ function nudgeTranspose(delta) {
 
 function resetTuning() {
   state.transpose = 0;
-  state.capo = state.suggestedCapo;
+  state.capo = 0; // înapoi la acordurile care se aud cu adevărat
   render();
 }
 
@@ -296,27 +356,29 @@ function resetTuning() {
 // care apare la hover. Trecerea cu mouse-ul peste un acord care urmează o înlocuiește
 // temporar, ca să poți pregăti următoarea schimbare; la ieșire revine la acordul curent.
 
+// Slotul are dimensiune FIXĂ prin CSS, chiar și gol. Altfel apariția și dispariția unui
+// dreptunghi mare mută restul panoului, cursorul „iese” de pe acordul pe care stă, diagrama
+// se schimbă înapoi, panoul se mută la loc — și o ia de la capăt. Ăsta era pâlpâitul.
+// A doua parte a reparației: nu redesenăm dacă e aceeași diagramă.
 function showDiagram(label) {
   if (!ui.diagramSlot) return;
-  const svg = label && label !== NO_CHORD && label !== STR.noChordsYet
-    ? renderChordDiagram(label, state.capo)
-    : null;
+  const wanted = label && label !== NO_CHORD && label !== STR.noChordsYet ? label : null;
+  const key = `${wanted}|${state.capo}|${state.tuning}`;
+  if (ui.diagramKey === key) return; // deja e pe ecran — nu atingem DOM-ul degeaba
+  ui.diagramKey = key;
+  const svg = wanted ? renderChordDiagram(wanted, state.capo, state.tuning) : null;
   ui.diagramSlot.innerHTML = svg || '';
   ui.diagramSlot.classList.toggle('is-empty', !svg);
 }
 
-function wireDiagramPreview(panel) {
-  const preview = (e) => {
-    const el = e.target.closest?.('.ct-chip[data-chord]');
-    if (el) showDiagram(el.dataset.chord);
-  };
-  const restore = (e) => {
-    if (e.target.closest?.('.ct-chip[data-chord]')) showDiagram(ui.current?.dataset.chord);
-  };
-  panel.addEventListener('mouseover', preview);
-  panel.addEventListener('focusin', preview);
-  panel.addEventListener('mouseout', restore);
-  panel.addEventListener('focusout', restore);
+// mouseenter/mouseleave nu se propagă și nu se declanșează la mișcarea în interiorul
+// aceluiași element — spre deosebire de mouseover/mouseout, care se aprindeau în lanț.
+function attachChipHover(chip) {
+  chip.addEventListener('mouseenter', () => showDiagram(chip.dataset.chord));
+  chip.addEventListener('focus', () => showDiagram(chip.dataset.chord));
+  const back = () => showDiagram(ui.current?.dataset.chord);
+  chip.addEventListener('mouseleave', back);
+  chip.addEventListener('blur', back);
 }
 
 // --- Mesaje, ceas, redare -----------------------------------------------------
@@ -345,7 +407,7 @@ function onMessage(msg) {
   if (msg.type === 'CHORD_EVENT' && msg.videoId === state.videoId) {
     log.debug('CHORD_EVENT', msg.label, '@', msg.t);
     state.chords.push({ t: msg.t, label: msg.label, confidence: msg.confidence });
-    if (state.mode === 'listening') render();
+    if (state.mode === 'listening') { render(); scheduleSave(); }
   }
 }
 

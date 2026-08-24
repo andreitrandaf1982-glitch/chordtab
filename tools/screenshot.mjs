@@ -107,10 +107,12 @@ try {
     const v = document.querySelector('video');
     return v && v.readyState >= 1;
   }, null, { timeout: 15000 });
+  // Sugestia e doar marcată; o aplicăm cu un click, ca în folosirea reală.
   await page.waitForFunction(
-    () => document.querySelector('#chordtab-panel .ct-capo.is-active')?.textContent?.trim() === '2',
+    () => !!document.querySelector('#chordtab-panel .ct-capo.is-suggested'),
     null, { timeout: 10000 });
   await page.evaluate(() => { document.querySelector('video').currentTime = 1; });
+  await page.click('#chordtab-panel .ct-capo.is-suggested');
   await page.waitForTimeout(600);
   await panel.screenshot({ path: join(OUT, 'panou-capo.png') });
   console.log('  docs/capturi/panou-capo.png');
