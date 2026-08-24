@@ -42,7 +42,7 @@ async function start({ streamId }) {
   await analyzer.init();
   await ctx.audioWorklet.addModule(chrome.runtime.getURL('offscreen/frame-processor.js'));
   const worklet = new AudioWorkletNode(ctx, 'chordtab-frame-processor');
-  worklet.port.onmessage = (e) => analyzer.push(e.data, videoTimeNow());
+  worklet.port.onmessage = (e) => analyzer?.push(e.data, videoTimeNow());
   source.connect(worklet);
   // Worklet-ul nu produce sunet, dar unele versiuni de Chrome nu-l rulează nelegat.
   const mute = ctx.createGain();

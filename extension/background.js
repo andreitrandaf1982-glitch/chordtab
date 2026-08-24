@@ -25,25 +25,32 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 async function startCapture(tab) {
-  await ensureOffscreen();
-  // getMediaStreamId cere gestul utilizatorului (clickul pe iconiță) — de aici, nu din altă parte
+  // ORDINEA CONTEAZĂ: cerem streamId ÎNAINTE de orice alt await. getMediaStreamId are nevoie
+  // de gestul utilizatorului (clickul pe iconiță), iar acesta se poate pierde peste un await.
   const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  await ensureOffscreen();
   state.capturingTabId = tab.id;
   log.info('Pornesc captura pe tab', tab.id);
-  chrome.runtime.sendMessage({ target: 'offscreen', type: 'START_CAPTURE', streamId, tabId: tab.id });
+  chrome.runtime
+    .sendMessage({ target: 'offscreen', type: 'START_CAPTURE', streamId, tabId: tab.id })
+    .catch((err) => log.error('START_CAPTURE nu a ajuns la offscreen:', err?.message));
   notifyContent({ type: 'CAPTURE_STATE', capturing: true });
 }
 
 async function stopCapture(reason) {
-  if (state.capturingTabId === null) return;
-  log.info('Opresc captura:', reason);
-  chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP_CAPTURE' }).catch(() => {});
-  notifyContent({ type: 'CAPTURE_STATE', capturing: false });
-  state.capturingTabId = null;
+  const wasCapturing = state.capturingTabId !== null;
+  if (wasCapturing) {
+    log.info('Opresc captura:', reason);
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP_CAPTURE' }).catch(() => {});
+    notifyContent({ type: 'CAPTURE_STATE', capturing: false });
+    state.capturingTabId = null;
+  }
+  // Închidem documentul necondiționat: dacă startCapture a crăpat după ce l-a creat,
+  // altfel ar rămâne agățat fără ca nimeni să-l mai închidă.
   try {
     await chrome.offscreen.closeDocument();
   } catch {
-    // era deja închis — ok
+    // nu era deschis — ok
   }
 }
 

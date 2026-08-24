@@ -41,6 +41,21 @@ function isAdShowing() {
 
 // --- Panoul -----------------------------------------------------------------
 
+// YouTube e SPA: la document_idle, #below poate să nu existe încă. Îl așteptăm scurt
+// înainte să cădem pe overlay — altfel panoul ajunge în colț chiar și pe pagini normale.
+function waitFor(selector, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    const found = document.querySelector(selector);
+    if (found) return resolve(found);
+    const obs = new MutationObserver(() => {
+      const el = document.querySelector(selector);
+      if (el) { obs.disconnect(); clearTimeout(timer); resolve(el); }
+    });
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+    const timer = setTimeout(() => { obs.disconnect(); resolve(null); }, timeoutMs);
+  });
+}
+
 function buildPanel() {
   if (ui.panel) ui.panel.remove();
   const panel = document.createElement('div');
@@ -59,15 +74,17 @@ function buildPanel() {
   ui.strip = panel.querySelector('.chordtab-strip');
   setStatus(STR.idle);
 
-  const host = document.querySelector('#below');
-  if (host) {
+  // Îl atașăm imediat (overlay) ca să fie vizibil din prima, apoi îl mutăm sub video
+  // când #below apare. Dacă nu apare deloc, rămâne overlay — comportamentul de rezervă.
+  panel.classList.add('chordtab-overlay');
+  document.body.appendChild(panel);
+
+  waitFor('#below').then((host) => {
+    if (!host || panel !== ui.panel || !panel.isConnected) return; // panoul a fost înlocuit între timp
+    panel.classList.remove('chordtab-overlay');
     host.prepend(panel);
-  } else {
-    // YouTube și-a schimbat DOM-ul sau nu suntem pe pagina de watch — overlay fix.
-    log.warn('Selectorul #below lipsește — folosesc overlay-ul de rezervă.');
-    panel.classList.add('chordtab-overlay');
-    document.body.appendChild(panel);
-  }
+    log.debug('Panou mutat sub video (#below).');
+  });
   // TODO(Pasul 7): tooltip cu diagrama acordului la hover pe .chordtab-current și chip-uri
 }
 

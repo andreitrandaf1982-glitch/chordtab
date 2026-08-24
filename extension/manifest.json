@@ -4,8 +4,20 @@
   "version": "0.1.0",
   "description": "Detectează local acordurile melodiei de pe YouTube și le afișează sincronizat, cu diagrame, capo și transpoziție. Zero servere, zero chei.",
   "permissions": ["tabCapture", "offscreen", "storage", "activeTab"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_title": "ChordTab: pornește/oprește analiza acordurilor"
+    "default_title": "ChordTab: pornește/oprește analiza acordurilor",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "background": {
     "service_worker": "background.js",
