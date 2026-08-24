@@ -6,8 +6,8 @@
   "description": "Extensie Chrome care detectează local acordurile de chitară din videoclipurile YouTube.",
   "license": "MIT",
   "scripts": {
-    "test": "node tests/music-theory.test.mjs && node tests/chord-detection.test.mjs && node tests/browser-selftest.mjs",
-    "test:unit": "node tests/music-theory.test.mjs && node tests/chord-detection.test.mjs",
+    "test": "npm run test:unit && node tests/browser-selftest.mjs",
+    "test:unit": "node tests/music-theory.test.mjs && node tests/chord-detection.test.mjs && node tests/progression.test.mjs",
     "test:browser": "node tests/browser-selftest.mjs"
   },
   "devDependencies": {

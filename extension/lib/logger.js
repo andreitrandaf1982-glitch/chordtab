@@ -14,7 +14,9 @@ const state = { debug: DEBUG_DEFAULT };
       if (area === 'local' && 'debug' in changes) state.debug = !!changes.debug.newValue;
     });
   } catch {
-    // în afara contextului de extensie (ex. teste node) rămâne debug=false
+    // În afara contextului de extensie (ex. testele din Node) nu există chrome.storage.
+    // Acolo tăcem: testele își tipăresc singure concluziile.
+    state.debug = false;
   }
 })();
 
