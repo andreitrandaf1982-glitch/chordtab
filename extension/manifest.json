@@ -25,7 +25,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["content/content.js", "lib/*.js", "assets/*", "vendor/*"],
+      "resources": ["content/content.js", "lib/*.js", "assets/*"],
       "matches": ["https://www.youtube.com/*"]
     }
   ]

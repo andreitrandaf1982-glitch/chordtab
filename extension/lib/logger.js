@@ -1,12 +1,15 @@
 // Logger central ChordTab. TOATE fișierele îl folosesc — niciun console.log direct.
 // debug/info tac dacă opțiunea "Debug logging" e oprită; warn/error se văd mereu.
 
-const state = { debug: false };
+// Implicit PORNIT cât timp construim (Pasul 8 îl trece pe false la trecerea finală de logging).
+export const DEBUG_DEFAULT = true;
+
+const state = { debug: DEBUG_DEFAULT };
 
 (async () => {
   try {
     const { debug } = await chrome.storage.local.get('debug');
-    state.debug = !!debug;
+    state.debug = debug === undefined ? DEBUG_DEFAULT : !!debug;
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && 'debug' in changes) state.debug = !!changes.debug.newValue;
     });

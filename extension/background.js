@@ -47,15 +47,26 @@ async function stopCapture(reason) {
   }
 }
 
+let offscreenReady = null; // resolver-ul strângerii de mână cu documentul offscreen
+
 async function ensureOffscreen() {
   const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
   if (contexts.length > 0) return;
+
+  // Scriptul offscreen e modul ES => se încarcă asincron DUPĂ createDocument(). Așteptăm
+  // semnalul OFFSCREEN_READY, altfel START_CAPTURE se pierde în gol.
+  const ready = new Promise((resolve) => { offscreenReady = resolve; });
   await chrome.offscreen.createDocument({
     url: 'offscreen/offscreen.html',
     reasons: ['USER_MEDIA'],
     justification: 'Analizează audio-ul tabului pentru detecția acordurilor de chitară.',
   });
-  log.debug('Document offscreen creat.');
+  const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), 10000));
+  if (await Promise.race([ready, timeout]) === 'timeout') {
+    log.warn('Documentul offscreen n-a semnalat OFFSCREEN_READY în 10s — continui oricum.');
+  }
+  offscreenReady = null;
+  log.debug('Document offscreen creat și pregătit.');
 }
 
 function notifyContent(msg) {
@@ -68,6 +79,11 @@ function notifyContent(msg) {
 // Releu: mesajele offscreen (CHORD_EVENT etc.) către content scriptul tabului capturat.
 // CT_TIME (content -> offscreen) NU trece pe aici: runtime.sendMessage ajunge direct la offscreen.
 chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.target === 'background' && msg.type === 'OFFSCREEN_READY') {
+    log.debug('Documentul offscreen a semnalat că e pregătit.');
+    offscreenReady?.();
+    return;
+  }
   if (msg?.target === 'content' && state.capturingTabId !== null) {
     notifyContent(msg);
   }

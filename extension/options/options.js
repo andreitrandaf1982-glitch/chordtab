@@ -1,4 +1,4 @@
-import { createLogger } from '../lib/logger.js';
+import { createLogger, DEBUG_DEFAULT } from '../lib/logger.js';
 
 const log = createLogger('options');
 const debugEl = document.getElementById('debug');
@@ -6,7 +6,7 @@ const clearEl = document.getElementById('clear-cache');
 const statusEl = document.getElementById('status');
 
 const { debug } = await chrome.storage.local.get('debug');
-debugEl.checked = !!debug;
+debugEl.checked = debug === undefined ? DEBUG_DEFAULT : !!debug;
 
 debugEl.addEventListener('change', async () => {
   await chrome.storage.local.set({ debug: debugEl.checked });

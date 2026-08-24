@@ -82,6 +82,30 @@ manual — AudioWorklet strânge cadre de 8192 eșantioane (hop 4096) la 44.1kHz
 (vendorizează o bibliotecă mică de FFT, ex. `fft.js`), mapare bin→clasă de înălțime
 (12 clase, însumare pe octavele 2–6) → același contract de ieșire: vector chroma de 12.
 
+> **REZULTAT PASUL 0 (executat 2026-08-24, Opus) — POARTA 0 TRECUTĂ, fallback-ul NU e necesar.**
+> - **Varianta care a mers: `ChordsDetection`** (nu potrivirea manuală pe șabloane).
+>   Lanț: `Windowing(hann) → Spectrum → SpectralPeaks → HPCP → ChordsDetection`.
+>   Scor: **8/8** acorduri sintetizate corect (C G D A Am Em Dm F), la **44100 ȘI 48000 Hz**.
+> - **Capcană descoperită — convenția HPCP: indexul 0 = A (referință 440 Hz), NU C.**
+>   Confirmat empiric (offset 9 → 8/8; offset 0 → 0/8). `ChordsDetection` știe singur
+>   convenția; offsetul contează doar dacă cineva citește vectorul chroma direct.
+> - **Parametrii HPCP = exact valorile implicite Essentia**, cu excepția `sampleRate`
+>   (AudioContext-ul rulează des la 48000). **NU pune `maxShifted=true`** — rotește vectorul
+>   la maxim și strică detecția. Testul `tests/chord-detection.test.mjs` blochează parametrii
+>   (verifică sursa lui `analyzer.js` și cade dacă îi schimbă cineva).
+> - **Cost: 0,29 ms/cadru** față de 42,7 ms disponibile la hop 2048@48kHz → **~0,7% CPU**.
+>   Timpul real e trivial de atins; nu e nevoie de rărirea cadrelor.
+> - **Build vendorizat: `essentia-wasm.es.js`** (2,44 MB) — încorporează WASM-ul ca base64,
+>   deci **fără fetch și fără `locateFile`**, exact ce trebuie sub CSP-ul MV3. NU folosi
+>   `essentia-wasm.web.js`: are nevoie de `document.currentScript.src`, care e `null` în
+>   module ES. (Build-ul `.es.js` nu merge în Node — `__dirname`; în teste folosim UMD.)
+> - **Curățenia memoriei e sigură:** `push_back` copiază, deci `delete()` imediat după e ok
+>   (verificat pe 200 de iterații, zero rezultate corupte).
+> - ⚠️ **Licență: essentia.js e AGPL-3.0** (copyleft puternic). Extensia trebuie livrată tot
+>   sub AGPL-3.0, cu sursa disponibilă. E în regulă pentru scopul lui Andrei (open-source,
+>   comunitate, învățare), dar **exclude o variantă comercială cu sursă închisă**.
+>   `LICENSE` (AGPL-3.0) e la rădăcină; `extension/vendor/LICENSE-essentia.txt` însoțește codul.
+
 ### Pasul 1 — Scheletul rulează
 `chrome://extensions` → Developer mode → Load unpacked pe folderul `extension/`.
 **POARTĂ 1:** extensia se încarcă fără erori; pe un video YouTube, click pe iconiță →

@@ -1,21 +1,29 @@
 // Documentul offscreen: singurul loc din MV3 unde putem prelua audio-ul tabului.
 // Primește streamId de la background, capturează, ține ceasul video (CT_TIME) și
-// va alimenta analizorul de acorduri (Pasul 2). Deocamdată: proof-of-life RMS (Poarta 1).
+// alimentează analizorul de acorduri.
 
 import { createLogger } from '../lib/logger.js';
-// import { Analyzer } from './analyzer.js'; // TODO(Pasul 2): activează și cablează
+import { Analyzer, selfTest } from './analyzer.js';
 
 const log = createLogger('offscreen');
 
-let media = null; // { stream, ctx, source, analyserNode, rmsInterval }
-let clock = null; // { videoId, t, rate, receivedAt } — ultimul CT_TIME primit
+let media = null;   // { stream, ctx, source, worklet, analyserNode, rmsInterval }
+let analyzer = null;
+let clock = null;   // { videoId, t, rate, receivedAt } — ultimul CT_TIME primit
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.target !== 'offscreen') return;
-  if (msg.type === 'START_CAPTURE') start(msg).catch((err) => log.error('Captura a eșuat:', err));
+  if (msg.type === 'START_CAPTURE') start(msg).catch((err) => log.error('Captura a eșuat:', err?.message || err));
   if (msg.type === 'STOP_CAPTURE') stop();
   if (msg.type === 'CT_TIME') clock = { videoId: msg.videoId, t: msg.t, rate: msg.rate, receivedAt: performance.now() };
 });
+
+// Scriptul e modul ES, deci se încarcă ASINCRON după createDocument(): fără semnalul ăsta,
+// background-ul poate trimite START_CAPTURE înainte ca ascultătorul de mai sus să existe.
+chrome.runtime.sendMessage({ target: 'background', type: 'OFFSCREEN_READY' }).catch(() => {});
+
+// POARTA 0: dovada în browser că lanțul WASM merge (acord C sintetizat -> „C”).
+selfTest().catch((err) => log.error('[POARTA 0] Auto-testul Essentia a eșuat:', err?.message || err));
 
 async function start({ streamId }) {
   stop();
@@ -29,33 +37,42 @@ async function start({ streamId }) {
   // NU șterge legătura asta: fără ea, captura mutează tabul și utilizatorul nu mai aude nimic.
   source.connect(ctx.destination);
 
+  // Analizorul de acorduri, alimentat de AudioWorklet.
+  analyzer = new Analyzer({ sampleRate: ctx.sampleRate, onChord: sendChordEvent });
+  await analyzer.init();
+  await ctx.audioWorklet.addModule(chrome.runtime.getURL('offscreen/frame-processor.js'));
+  const worklet = new AudioWorkletNode(ctx, 'chordtab-frame-processor');
+  worklet.port.onmessage = (e) => analyzer.push(e.data, videoTimeNow());
+  source.connect(worklet);
+  // Worklet-ul nu produce sunet, dar unele versiuni de Chrome nu-l rulează nelegat.
+  const mute = ctx.createGain();
+  mute.gain.value = 0;
+  worklet.connect(mute).connect(ctx.destination);
+
+  // POARTA 1: dovada că preluarea audio funcționează, independent de detecția de acorduri.
   const analyserNode = ctx.createAnalyser();
   analyserNode.fftSize = 2048;
   source.connect(analyserNode);
-
-  // Proof-of-life pentru Poarta 1. Pasul 2 înlocuiește cu AudioWorklet -> Analyzer.
   const buf = new Float32Array(analyserNode.fftSize);
   const rmsInterval = setInterval(() => {
     analyserNode.getFloatTimeDomainData(buf);
     let sum = 0;
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-    const rms = Math.sqrt(sum / buf.length);
-    log.info(`RMS=${rms.toFixed(4)} @video t=${videoTimeNow().toFixed(1)}s`);
+    log.info(`[POARTA 1] RMS=${Math.sqrt(sum / buf.length).toFixed(4)} @video t=${videoTimeNow().toFixed(1)}s`);
   }, 1000);
 
-  media = { stream, ctx, source, analyserNode, rmsInterval };
-  log.info('Captura audio a pornit.');
-
-  // TODO(Pasul 2): const analyzer = new Analyzer({ onChord: sendChordEvent });
-  //                AudioWorklet care împinge cadre Float32 în analyzer.push(frame, videoTimeNow())
+  media = { stream, ctx, source, worklet, analyserNode, rmsInterval };
+  log.info(`Captura audio a pornit. sampleRate=${ctx.sampleRate}`);
 }
 
 function stop() {
   if (!media) return;
   clearInterval(media.rmsInterval);
+  try { media.worklet.port.onmessage = null; media.worklet.disconnect(); } catch { /* deja oprit */ }
   media.stream.getTracks().forEach((t) => t.stop());
   media.ctx.close().catch(() => {});
   media = null;
+  if (analyzer) { analyzer.flush(); analyzer.dispose(); analyzer = null; }
   clock = null;
   log.info('Captura audio s-a oprit.');
 }
@@ -63,11 +80,9 @@ function stop() {
 // Timpul curent al videoclipului, interpolat din ultimul CT_TIME. -1 = ceas absent (ex. reclamă).
 function videoTimeNow() {
   if (!clock) return -1;
-  const elapsed = (performance.now() - clock.receivedAt) / 1000;
-  return clock.t + elapsed * (clock.rate || 1);
+  return clock.t + ((performance.now() - clock.receivedAt) / 1000) * (clock.rate || 1);
 }
 
-// eslint-disable-next-line no-unused-vars
 function sendChordEvent({ t, label, confidence }) {
   if (!clock) return;
   chrome.runtime.sendMessage({
