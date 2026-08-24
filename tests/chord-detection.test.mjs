@@ -1,72 +1,62 @@
-// Rulare: node tests/chord-detection.test.mjs   (cere `npm install essentia.js`)
+// Rulare: node tests/chord-detection.test.mjs
 //
-// Blochează deciziile DSP validate la Pasul 0:
-//  1. lanțul Windowing -> Spectrum -> SpectralPeaks -> HPCP -> ChordsDetection recunoaște
-//     corect 8 acorduri sintetizate, la 44100 ȘI la 48000 Hz (rata reală a AudioContext);
-//  2. parametrii HPCP din analyzer.js sunt exact cei testați aici (verificare pe sursă —
-//     dacă cineva îi schimbă, testul cade și explică de ce contează).
+// Verifică lanțul propriu de detecție (FFT -> vârfuri spectrale -> chroma -> șabloane),
+// care a înlocuit Essentia.js — vezi docs/BUG-essentia-mv3-csp.md.
+// Aceeași suită de acorduri ca la Pasul 0, ca să putem compara cinstit cele două variante.
 
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { readFileSync, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { FFT } from '../extension/lib/fft.js';
+import { spectralPeaks, chromaFromPeaks } from '../extension/lib/chroma.js';
+import { matchChord } from '../extension/lib/chords.js';
+import { NOTES, NO_CHORD } from '../extension/lib/music-theory.js';
 
-const require = createRequire(import.meta.url);
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = join(ROOT, 'node_modules', 'essentia.js', 'dist');
+const FRAME = 8192, HOP = 4096;
+const freqOf = (name, oct = 4) => 440 * Math.pow(2, (NOTES.indexOf(name) - 9) / 12 + (oct - 4));
 
-if (!existsSync(DIST)) {
-  console.log('SĂRIT: lipsește node_modules/essentia.js — rulează `npm install essentia.js`.');
-  process.exit(0);
+// --- 1. FFT: un sinus curat trebuie să dea vârful la frecvența lui ------------
+{
+  const sr = 44100, f = 440, fft = new FFT(FRAME);
+  const sig = new Float32Array(FRAME);
+  for (let i = 0; i < FRAME; i++) sig[i] = Math.sin((2 * Math.PI * f * i) / sr);
+  const mag = fft.magnitudeSpectrum(sig);
+  let peakBin = 0;
+  for (let i = 1; i < mag.length; i++) if (mag[i] > mag[peakBin]) peakBin = i;
+  const peakHz = (peakBin * sr) / FRAME;
+  assert.ok(Math.abs(peakHz - f) < sr / FRAME, `vârf FFT la ${peakHz.toFixed(1)} Hz, aștept ${f}`);
+
+  const peaks = spectralPeaks(mag, sr, FRAME);
+  assert.ok(Math.abs(peaks[0].freq - f) < 1.0,
+    `după interpolare aștept ~${f} Hz, am ${peaks[0].freq.toFixed(2)}`);
+  console.log(`  FFT: vârf la ${peaks[0].freq.toFixed(2)} Hz (aștept ${f}) ✔`);
 }
 
-// În Node folosim build-ul UMD (cel ES cade pe __dirname); extensia folosește build-ul ES.
-const EssentiaWASM = require(join(DIST, 'essentia-wasm.umd.js'));
-const Essentia = require(join(DIST, 'essentia.js-core.umd.js'));
-const essentia = new Essentia(EssentiaWASM);
-
-const FRAME_SIZE = 4096, HOP_SIZE = 2048;
-const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const freqOf = (name) => 440 * Math.pow(2, (NOTES.indexOf(name) - 9) / 12);
-
-function synth(noteNames, sampleRate, seconds = 2) {
+// --- 2. Un semnal cât de cât realist: fundamentală + armonice, cu atac și stingere ---
+function synth(noteNames, sampleRate, seconds = 2, octave = 3) {
   const n = Math.floor(seconds * sampleRate);
   const out = new Float32Array(n);
+  const freqs = noteNames.map((x) => freqOf(x, octave));
   for (let i = 0; i < n; i++) {
+    const env = Math.exp(-1.2 * (i / sampleRate)) * Math.min(1, (i / sampleRate) * 60);
     let s = 0;
-    for (const f of noteNames.map(freqOf)) {
-      s += Math.sin(2 * Math.PI * f * i / sampleRate)
-         + 0.35 * Math.sin(2 * Math.PI * 2 * f * i / sampleRate)
-         + 0.15 * Math.sin(2 * Math.PI * 3 * f * i / sampleRate);
+    for (const f of freqs) {
+      // spectru asemănător unei corzi ciupite: armonice care scad ~1/h
+      for (let h = 1; h <= 6; h++) s += (1 / h) * Math.sin((2 * Math.PI * f * h * i) / sampleRate);
     }
-    out[i] = (s / 4.5) * 0.8;
+    out[i] = (s / (freqs.length * 2.5)) * env * 0.9;
   }
   return out;
 }
 
-// Aceleași apeluri și aceiași parametri ca Analyzer.frameToHpcp / Analyzer.detectOn.
-function frameToHpcp(frame, sampleRate) {
-  const vec = essentia.arrayToVector(frame);
-  const win = essentia.Windowing(vec, true, FRAME_SIZE, 'hann').frame;
-  const spec = essentia.Spectrum(win, FRAME_SIZE).spectrum;
-  const peaks = essentia.SpectralPeaks(spec, 0, 5000, 100, 20, 'frequency', sampleRate);
-  const hpcp = essentia.HPCP(peaks.frequencies, peaks.magnitudes, true, 500, 0, 5000, false, 40,
-    false, 'unitMax', 440, sampleRate, 12, 'squaredCosine', 1);
-  return Array.from(essentia.vectorToArray(hpcp.hpcp));
-}
-
-function dominantChord(frames, sampleRate) {
-  const vv = new essentia.module.VectorVectorFloat();
-  for (const f of frames) vv.push_back(essentia.arrayToVector(Float32Array.from(f)));
-  const res = essentia.ChordsDetection(vv, HOP_SIZE, sampleRate, FRAME_SIZE);
-  const tally = new Map();
-  for (let i = 0; i < res.chords.size(); i++) {
-    const c = res.chords.get(i);
-    tally.set(c, (tally.get(c) || 0) + 1);
+function analyze(signal, sampleRate) {
+  const fft = new FFT(FRAME);
+  const votes = new Map();
+  for (let o = 0; o + FRAME <= signal.length; o += HOP) {
+    const mag = fft.magnitudeSpectrum(signal.subarray(o, o + FRAME));
+    const { label } = matchChord(chromaFromPeaks(spectralPeaks(mag, sampleRate, FRAME)));
+    if (label !== NO_CHORD) votes.set(label, (votes.get(label) || 0) + 1);
   }
-  vv.delete();
-  return [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  if (votes.size === 0) return NO_CHORD;
+  return [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
 const CASES = [
@@ -75,48 +65,68 @@ const CASES = [
 ];
 
 for (const sampleRate of [44100, 48000]) {
+  const wrong = [];
   for (const [expected, notes] of CASES) {
-    const signal = synth(notes, sampleRate);
-    const frames = [];
-    for (let o = 0; o + FRAME_SIZE <= signal.length; o += HOP_SIZE) {
-      frames.push(frameToHpcp(signal.subarray(o, o + FRAME_SIZE), sampleRate));
-    }
-    const got = dominantChord(frames, sampleRate);
-    assert.equal(got, expected, `@${sampleRate}Hz: ${notes.join('+')} -> ${got}, așteptat ${expected}`);
+    const got = analyze(synth(notes, sampleRate), sampleRate);
+    if (got !== expected) wrong.push(`${expected}->${got}`);
   }
+  assert.equal(wrong.length, 0, `@${sampleRate}Hz greșite: ${wrong.join(', ')}`);
   console.log(`  ${sampleRate} Hz: ${CASES.length}/${CASES.length} acorduri corecte ✔`);
 }
 
-// Convenția HPCP: indexul 0 = A (referință 440 Hz), NU C. Contează dacă citim chroma direct.
+// --- 3. Convenție: indexul 0 al vectorului chroma = C ------------------------
 {
-  const signal = synth(['C', 'E', 'G'], 44100);
-  const avg = new Array(12).fill(0);
-  let count = 0;
-  for (let o = 0; o + FRAME_SIZE <= signal.length; o += HOP_SIZE) {
-    const f = frameToHpcp(signal.subarray(o, o + FRAME_SIZE), 44100);
-    for (let i = 0; i < 12; i++) avg[i] += f[i];
-    count++;
-  }
-  const top3 = avg.map((v, i) => ({ v: v / count, i })).sort((a, b) => b.v - a.v).slice(0, 3);
-  const asC = top3.map((t) => NOTES[t.i]).sort().join(',');
-  const asA = top3.map((t) => NOTES[(t.i + 9) % 12]).sort().join(',');
-  assert.notEqual(asC, 'C,E,G', 'dacă asta trece, convenția HPCP s-a schimbat — reverifică offsetul');
-  assert.equal(asA, 'C,E,G', 'HPCP index 0 ar trebui să fie A (offset 9 până la C)');
-  console.log('  HPCP: index 0 = A confirmat (offset 9 → C) ✔');
+  const sr = 44100;
+  const fft = new FFT(FRAME);
+  const sig = synth(['C', 'E', 'G'], sr);
+  const mag = fft.magnitudeSpectrum(sig.subarray(4096, 4096 + FRAME));
+  const ch = chromaFromPeaks(spectralPeaks(mag, sr, FRAME));
+  const top3 = [...ch].map((v, i) => ({ v, i })).sort((a, b) => b.v - a.v).slice(0, 3);
+  assert.equal(top3.map((t) => NOTES[t.i]).sort().join(','), 'C,E,G',
+    'indexul 0 al chroma trebuie să fie C');
+  console.log('  Chroma: index 0 = C confirmat ✔');
 }
 
-// Parametrii HPCP din analyzer.js trebuie să rămână cei testați aici.
+// --- 4. Zgomot și liniște -> N.C., nu un acord inventat ----------------------
 {
-  const src = readFileSync(join(ROOT, 'extension', 'offscreen', 'analyzer.js'), 'utf8');
-  const call = src.match(/e\.HPCP\(peaks\.frequencies,\s*peaks\.magnitudes,([^;]*?)\);/s);
-  assert.ok(call, 'nu găsesc apelul HPCP în analyzer.js');
-  const args = call[1].replace(/\s+/g, ' ').trim();
-  assert.equal(
-    args,
-    "true, 500, 0, 5000, false, 40, false, 'unitMax', 440, this.sampleRate, 12, 'squaredCosine', 1",
-    'parametrii HPCP din analyzer.js diferă de cei validați (atenție la maxShifted: true rotește vectorul și strică detecția)'
-  );
-  console.log('  Parametrii HPCP din analyzer.js sunt sincronizați cu testul ✔');
+  const sr = 44100, fft = new FFT(FRAME);
+  const silence = new Float32Array(FRAME);
+  assert.equal(matchChord(chromaFromPeaks(spectralPeaks(fft.magnitudeSpectrum(silence), sr, FRAME))).label,
+    NO_CHORD, 'liniștea trebuie să dea N.C.');
+
+  // zgomot alb, deterministic (generator liniar congruențial — fără Math.random)
+  let seed = 12345;
+  const noise = new Float32Array(FRAME);
+  for (let i = 0; i < FRAME; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    noise[i] = (seed / 0x3fffffff) - 1;
+  }
+  const nl = matchChord(chromaFromPeaks(spectralPeaks(fft.magnitudeSpectrum(noise), sr, FRAME)));
+  console.log(`  Liniște -> N.C. ✔ | zgomot alb -> ${nl.label} (scor ${nl.score.toFixed(2)})`);
+}
+
+// --- 5. Worklet-ul și analizorul trebuie să folosească aceleași dimensiuni de cadru ---
+// Nu se pot importa între ele (worklet-ul rulează în scope-ul audio, fără module), deci
+// constantele sunt duplicate. Dacă se desincronizează, analizorul primește cadre greșite.
+{
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+  const read = (p) => readFileSync(join(ROOT, 'extension', p), 'utf8');
+  const grab = (src, name) => Number(src.match(new RegExp(`${name}\\s*=\\s*(\\d+)`))?.[1]);
+
+  const analyzer = read('offscreen/analyzer.js');
+  const worklet = read('offscreen/frame-processor.js');
+  for (const name of ['FRAME_SIZE', 'HOP_SIZE']) {
+    const a = grab(analyzer, name), w = grab(worklet, name);
+    assert.ok(Number.isFinite(a) && Number.isFinite(w), `nu găsesc ${name} în ambele fișiere`);
+    assert.equal(w, a, `${name} diferă: analyzer.js=${a}, frame-processor.js=${w}`);
+  }
+  assert.equal(grab(analyzer, 'FRAME_SIZE'), FRAME,
+    'testul rulează pe altă dimensiune de cadru decât analizorul');
+  console.log('  Dimensiunile cadrului sunt sincronizate (analyzer ↔ worklet ↔ test) ✔');
 }
 
 console.log('chord-detection.test.mjs: toate testele au trecut ✔');

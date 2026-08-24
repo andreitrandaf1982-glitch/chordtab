@@ -4,7 +4,7 @@ Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browseru
 (zero servere, zero chei API, zero costuri) și afișează acordurile principale sincronizate
 cu redarea — cu diagrame la hover, sugestie de capo și transpoziție.
 
-**Stare:** în lucru — Etapa 1, Pasul 0 încheiat (motorul de detecție validat).
+**Stare:** în lucru — Etapa 1, Pasul 0 încheiat (motorul de detecție scris și validat).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md)
 
 ## Instalare (dezvoltare)
@@ -13,25 +13,42 @@ Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-e
 2. **Load unpacked** → alege folderul `extension/`.
 3. Deschide un video pe YouTube și apasă pe iconița extensiei.
 
+Verificarea pas cu pas, în română: [docs/VERIFICARE-porti-0-1-2.md](docs/VERIFICARE-porti-0-1-2.md)
+
 ## Teste
 
 ```bash
-npm install     # o singură dată (aduce essentia.js pentru teste)
+npm install
+npx playwright install chromium   # o singură dată, pentru testul din browser
 npm test
 ```
 
-`tests/music-theory.test.mjs` — transpoziție, parsare de acorduri, calculul capo-ului.
-`tests/chord-detection.test.mjs` — lanțul de detecție pe acorduri sintetizate, la 44100 și 48000 Hz.
+| Test | Ce verifică |
+|---|---|
+| `tests/music-theory.test.mjs` | transpoziție, parsare de acorduri, calculul capo-ului |
+| `tests/chord-detection.test.mjs` | lanțul FFT → chroma → acord, pe acorduri sintetizate, la 44100 și 48000 Hz |
+| `tests/browser-selftest.mjs` | extensia încărcată într-un Chromium real, sub CSP-ul MV3 |
+
+`npm run test:unit` sare peste testul din browser dacă nu vrei să aștepți.
 
 ## Cum funcționează
 
 Sunetul tabului e preluat cu `chrome.tabCapture` și analizat într-un document offscreen:
-`Windowing → Spectrum → SpectralPeaks → HPCP → ChordsDetection` (Essentia.js, WebAssembly).
-Nimic nu părăsește browserul.
+
+```
+cadru audio → FFT → vârfuri spectrale (interpolate) → chroma (12 clase) → șabloane de acorduri
+```
+
+Totul e cod propriu, fără biblioteci externe și fără WebAssembly. Nimic nu părăsește browserul.
+
+> Prima variantă folosea [essentia.js](https://github.com/MTG/essentia.js). Trecea toate testele
+> în Node, dar nu poate rula într-o extensie Manifest V3 — povestea completă e în
+> [docs/BUG-essentia-mv3-csp.md](docs/BUG-essentia-mv3-csp.md). Merită citită dacă te
+> interesează de ce un test verde nu înseamnă întotdeauna cod care merge.
 
 ## Limitări oneste
 
-- Detectează acordurile **principale** (majore/minore); nu transcrie solo-uri sau tabs
+- Detectează acordurile **principale** (majore și minore); nu transcrie solo-uri sau tabs
   notă-cu-notă. Acuratețea scade pe mixuri foarte dense.
 - Prima analiză se face în timp ce melodia se redă; rezultatul se salvează per video.
 - La viteze de redare diferite de 1x sincronizarea rămâne corectă, dar calitatea detecției scade.
@@ -40,6 +57,4 @@ Nimic nu părăsește browserul.
 
 ## Licență
 
-**AGPL-3.0** — impusă de [essentia.js](https://github.com/MTG/essentia.js) (Music Technology
-Group, Universitat Pompeu Fabra), motorul de analiză audio. Codul extensiei e deci open-source
-și trebuie să rămână așa; vezi [LICENSE](LICENSE).
+[MIT](LICENSE).

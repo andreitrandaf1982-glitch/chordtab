@@ -23,7 +23,13 @@ chrome.runtime.onMessage.addListener((msg) => {
 chrome.runtime.sendMessage({ target: 'background', type: 'OFFSCREEN_READY' }).catch(() => {});
 
 // POARTA 0: dovada în browser că lanțul WASM merge (acord C sintetizat -> „C”).
-selfTest().catch((err) => log.error('[POARTA 0] Auto-testul Essentia a eșuat:', err?.message || err));
+// Rezultatul e pus și pe window, ca tests/browser-selftest.mjs să-l poată citi automat.
+selfTest()
+  .then((ok) => { window.__chordtabGate = { ok }; })
+  .catch((err) => {
+    log.error('[POARTA 0] Auto-testul Essentia a eșuat:', err?.message || err);
+    window.__chordtabGate = { ok: false, error: String(err?.message || err) };
+  });
 
 async function start({ streamId }) {
   stop();

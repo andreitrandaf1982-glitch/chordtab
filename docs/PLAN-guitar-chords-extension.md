@@ -53,13 +53,20 @@ extension/
   content/loader.js        — încărcător minuscul (content scripts nu pot fi module ES)
   content/content.js       — panou UI + sincronizare + cache
   content/panel.css        — stiluri panou
+  offscreen/frame-processor.js — AudioWorklet: cadre suprapuse 8192/4096 (pasul 0)
   lib/logger.js            — logging central (GATA — folosește-l în TOATE fișierele)
   lib/music-theory.js      — transpoziție + capo + parsare acorduri (GATA — nu rescrie)
+  lib/fft.js               — FFT radix-2 + fereastră Hann (GATA, testat)
+  lib/chroma.js            — vârfuri spectrale -> 12 clase de înălțime (GATA, testat)
+  lib/chords.js            — 24 șabloane maj/min + similaritate cosinus (GATA, testat)
   lib/strings.js           — toate textele UI, în română (nimic hardcodat în alte fișiere)
+  icons/                   — iconițe generate (16/32/48/128)
   options/options.html/.js — comutator debug + golire cache
-  vendor/                  — essentia.js vendorizat (pasul 0)
   assets/chords.json       — subset diagrame de acorduri (pasul 7)
-tests/music-theory.test.mjs — rulezi cu `node tests/music-theory.test.mjs`
+tests/music-theory.test.mjs   — teorie muzicală
+tests/chord-detection.test.mjs — lanțul de detecție (FFT -> chroma -> acord)
+tests/browser-selftest.mjs     — extensia într-un Chromium real, sub CSP-ul MV3
+   `npm test` le rulează pe toate trei.
 ```
 
 Convenție de mesaje (respect-o strict): orice mesaj are `{target: 'background'|'offscreen'|'content', type, ...payload}`.
@@ -82,29 +89,37 @@ manual — AudioWorklet strânge cadre de 8192 eșantioane (hop 4096) la 44.1kHz
 (vendorizează o bibliotecă mică de FFT, ex. `fft.js`), mapare bin→clasă de înălțime
 (12 clase, însumare pe octavele 2–6) → același contract de ieșire: vector chroma de 12.
 
-> **REZULTAT PASUL 0 (executat 2026-08-24, Opus) — POARTA 0 TRECUTĂ, fallback-ul NU e necesar.**
-> - **Varianta care a mers: `ChordsDetection`** (nu potrivirea manuală pe șabloane).
->   Lanț: `Windowing(hann) → Spectrum → SpectralPeaks → HPCP → ChordsDetection`.
->   Scor: **8/8** acorduri sintetizate corect (C G D A Am Em Dm F), la **44100 ȘI 48000 Hz**.
-> - **Capcană descoperită — convenția HPCP: indexul 0 = A (referință 440 Hz), NU C.**
->   Confirmat empiric (offset 9 → 8/8; offset 0 → 0/8). `ChordsDetection` știe singur
->   convenția; offsetul contează doar dacă cineva citește vectorul chroma direct.
-> - **Parametrii HPCP = exact valorile implicite Essentia**, cu excepția `sampleRate`
->   (AudioContext-ul rulează des la 48000). **NU pune `maxShifted=true`** — rotește vectorul
->   la maxim și strică detecția. Testul `tests/chord-detection.test.mjs` blochează parametrii
->   (verifică sursa lui `analyzer.js` și cade dacă îi schimbă cineva).
-> - **Cost: 0,29 ms/cadru** față de 42,7 ms disponibile la hop 2048@48kHz → **~0,7% CPU**.
->   Timpul real e trivial de atins; nu e nevoie de rărirea cadrelor.
-> - **Build vendorizat: `essentia-wasm.es.js`** (2,44 MB) — încorporează WASM-ul ca base64,
->   deci **fără fetch și fără `locateFile`**, exact ce trebuie sub CSP-ul MV3. NU folosi
->   `essentia-wasm.web.js`: are nevoie de `document.currentScript.src`, care e `null` în
->   module ES. (Build-ul `.es.js` nu merge în Node — `__dirname`; în teste folosim UMD.)
-> - **Curățenia memoriei e sigură:** `push_back` copiază, deci `delete()` imediat după e ok
->   (verificat pe 200 de iterații, zero rezultate corupte).
-> - ⚠️ **Licență: essentia.js e AGPL-3.0** (copyleft puternic). Extensia trebuie livrată tot
->   sub AGPL-3.0, cu sursa disponibilă. E în regulă pentru scopul lui Andrei (open-source,
->   comunitate, învățare), dar **exclude o variantă comercială cu sursă închisă**.
->   `LICENSE` (AGPL-3.0) e la rădăcină; `extension/vendor/LICENSE-essentia.txt` însoțește codul.
+> **REZULTAT PASUL 0 (executat 2026-08-24, Opus) — POARTA 0 TRECUTĂ, PE FALLBACK.**
+>
+> **Essentia.js a fost încercată și abandonată.** Merge impecabil în Node (8/8 acorduri), dar
+> **nu poate rula într-o extensie MV3**: glue-ul emscripten/embind își construiește funcțiile
+> de legătură cu C++ ca text și le evaluează, ceea ce CSP-ul extensiilor interzice. Două
+> încercări (vendorizare simplă, apoi peticirea locurilor care evaluează text) au eșuat;
+> mecanismul e central în embind, nu se poate ocoli cu un petic. Raport complet, cu stack
+> trace și ce s-a mai luat în calcul: **`docs/BUG-essentia-mv3-csp.md`**.
+>
+> **Lecția de metodă:** testele Node treceau, browserul cădea. De aici a apărut
+> `tests/browser-selftest.mjs` — încarcă extensia într-un Chromium real și verifică sub CSP-ul
+> autentic. Rulează-l după fiecare pas; Node nu poate dovedi că ceva merge într-o extensie.
+>
+> **Varianta livrată: lanțul propriu prevăzut ca fallback**, în trei module pure și testabile:
+> `lib/fft.js` (FFT radix-2 + fereastră Hann) → `lib/chroma.js` (vârfuri spectrale cu
+> interpolare parabolică → 12 clase de înălțime) → `lib/chords.js` (24 de șabloane maj/min,
+> similaritate cosinus, prag 0,6 → `N.C.`).
+> - **Scor: 8/8** acorduri (C G D A Am Em Dm F), la **44100 ȘI 48000 Hz** — egal cu Essentia.
+>   În plus, liniștea și zgomotul alb dau corect `N.C.`, nu un acord inventat.
+> - **Cadru 8192, hop 4096** (ca în fallback-ul din plan). Constantele sunt duplicate în
+>   `frame-processor.js` (worklet-ul nu poate importa module) — **un test verifică sincronizarea**.
+> - **Convenție chroma: indexul 0 = C.** (Essentia folosea 0 = A — de-aia ne-a surprins.)
+> - Vârfurile sunt interpolate parabolic: frecvența iese mult mai precisă decât lățimea unui
+>   bin, ceea ce contează la notele joase, unde semitonurile sunt mai apropiate decât rezoluția.
+>
+> **Câștiguri colaterale față de planul inițial:**
+> - **Licența e acum MIT**, nu AGPL-3.0 — Essentia impunea copyleft puternic. Extensia poate fi
+>   folosită și dezvoltată liber.
+> - **Minus 2,44 MB** de cod străin; extensia nu mai are deloc WebAssembly.
+> - CSP-ul a fost strâns la `script-src 'self'` — `wasm-unsafe-eval` nu mai e necesar.
+> - Codul e de înțeles cap-coadă, ceea ce contează: scopul proiectului e învățarea.
 
 ### Pasul 1 — Scheletul rulează
 `chrome://extensions` → Developer mode → Load unpacked pe folderul `extension/`.
@@ -113,9 +128,10 @@ consola offscreen loghează RMS-ul la fiecare secundă, **audio-ul se aude în c
 iar panoul apare sub video cu starea „Ascult…". Al doilea click oprește captura.
 
 ### Pasul 2 — Detecția în timp real
-În `analyzer.js`: cadrele audio → chroma la ~4 cadre/s → potrivire pe șabloane
-(24 de șabloane: 12 majore, 12 minore; similaritate cosinus; sub prag 0.6 → `N.C.`)
-sau direct ChordsDetection, după ce a mers la pasul 0. Fiecare detecție primește
+*(Implementat deja la Pasul 0, odată cu trecerea pe lanțul propriu — rămâne de verificat
+în browser pe muzică reală.)* În `analyzer.js`: cadrele audio → chroma → potrivire pe șabloane
+(24 de șabloane: 12 majore, 12 minore; similaritate cosinus; sub prag 0.6 → `N.C.`).
+Fiecare detecție primește
 timestamp-ul video interpolat din ultimul `CT_TIME` (t + timpul scurs de la primire,
 înmulțit cu `rate`). Trimite `CHORD_EVENT` doar când acordul se schimbă.
 Ignoră perioadele de reclamă: content.js detectează clasa `ad-showing` pe
@@ -180,7 +196,8 @@ upgrade viitor. Test final pe un profil Chrome curat.
 
 1. **Tabul se mutează la captură** → e normal; legătura `sursă→destination` din offscreen
    rezolvă. Dacă auzi liniște, acolo s-a rupt ceva, nu în YouTube.
-2. **Essentia nu merge în WASM/MV3** → fallback-ul concret e în pasul 0. Nu improviza altul.
+2. ~~**Essentia nu merge în WASM/MV3**~~ → **S-A ÎNTÂMPLAT.** Fallback-ul din pasul 0 a fost
+   aplicat: lanț propriu FFT → chroma → șabloane. Vezi `docs/BUG-essentia-mv3-csp.md`.
 3. **YouTube își schimbă DOM-ul** → injectarea are fallback overlay; nu depinde de clase
    obscure, doar de `#below` + `.html5-video-player` + elementul `<video>`.
 4. **Viteza de redare ≠ 1x** → timestamp-urile folosesc `currentTime`, deci sincronizarea

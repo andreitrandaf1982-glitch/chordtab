@@ -2,8 +2,10 @@
 // Rulează în scope-ul audio (fără chrome.*, fără import-uri) — ține-l minimal.
 // Contract: postMessage(Float32Array de FRAME_SIZE) la fiecare HOP_SIZE eșantioane noi.
 
-const FRAME_SIZE = 4096;
-const HOP_SIZE = 2048;
+// ATENȚIE: trebuie să rămână identice cu FRAME_SIZE / HOP_SIZE din analyzer.js.
+// Nu le pot importa: worklet-ul rulează în scope-ul audio, fără module.
+const FRAME_SIZE = 8192;
+const HOP_SIZE = 4096;
 
 class FrameProcessor extends AudioWorkletProcessor {
   constructor() {

@@ -1,9 +1,17 @@
-# Verificare în Chrome — Porțile 0, 1 și 2
+# Verificare în Chrome — Porțile 1 și 2
 
-Codul e scris și testat cât se poate fără browser (motorul de acorduri: 8/8 acorduri corecte
-în teste automate). Ce urmează **nu poate fi verificat decât de un om cu Chrome deschis**.
+**Poarta 0 e deja trecută, automat.** `npm test` încarcă extensia într-un Chromium real și
+verifică sub CSP-ul autentic că motorul de acorduri pornește și recunoaște corect un Do major:
 
-Cele trei porți se verifică într-o singură sesiune, fiindcă fiecare lasă în consolă o urmă
+```
+Poarta 0 (browser): lanțul de detecție rulează sub CSP-ul MV3, chord=C ✔
+```
+
+Ce urmează **nu poate fi verificat decât de un om cu Chrome deschis și boxele pornite**:
+captura audio cere un click pe iconiță (gest de utilizator, neautomatizabil), iar calitatea
+detecției pe muzică reală cere o ureche.
+
+Ambele porți se verifică într-o singură sesiune, fiindcă fiecare lasă în consolă o urmă
 **distinctă** — dacă una pică, se vede exact care.
 
 ---
@@ -21,21 +29,11 @@ manifestul sau un fișier are o problemă, și n-are rost să mergi mai departe.
 
 ---
 
-## Poarta 0 — motorul de acorduri merge în browser
+## Unde se uită
 
-Documentul offscreen se creează abia la prima captură, deci întâi pornește o analiză (pasul de
-mai jos), apoi deschide consola lui:
-
-1. Pe `chrome://extensions`, la ChordTab, click pe linkul **„offscreen.html"** de la
-   *Inspect views* (apare doar cât timp captura e pornită).
-2. În consola care se deschide, caută linia:
-
-```
-[ChordTab:analyzer] [POARTA 0] chord=C (conf 1.00) — CORECT ✔
-```
-
-**Trecut dacă:** scrie `chord=C ... CORECT ✔`.
-**Picat dacă:** scrie `GREȘIT` sau apare `Auto-testul Essentia a eșuat`. Trimite-mi mesajul.
+Documentul offscreen (unde se face toată analiza) există **doar cât timp captura e pornită**.
+Ca să-i vezi consola: pe `chrome://extensions`, la ChordTab, click pe linkul **„offscreen.html"**
+de la *Inspect views* — apare în listă după ce ai pornit analiza.
 
 ---
 
