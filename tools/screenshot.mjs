@@ -112,6 +112,13 @@ try {
     return v && v.readyState >= 1;
   }, null, { timeout: 15000 });
 
+  // Prima captură: ghidul, care se deschide singur la prima folosire (profil proaspăt).
+  await page.locator('#chordtab-panel .ct-guide').waitFor({ state: 'visible', timeout: 10000 });
+  await neutralMouse();
+  await panel.screenshot({ path: join(OUT, 'panou-ghid.png') });
+  console.log('  docs/capturi/panou-ghid.png');
+  await page.click('#chordtab-panel .ct-guide-done'); // restul capturilor, fără ghid
+
   await page.evaluate(() => { document.querySelector('video').currentTime = 7; });
   await page.waitForTimeout(600);
   await neutralMouse();

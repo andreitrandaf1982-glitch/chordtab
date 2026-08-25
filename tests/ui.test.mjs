@@ -121,6 +121,42 @@ try {
     assert.match(status, /memorate/i, `stare neașteptată: „${status}”`);
   });
 
+  // --- GHIDUL: extensia trebuie să-și explice singură cele două faze ---
+
+  await check('Ghidul portocaliu se deschide singur prima oară', async () => {
+    await page.locator('#chordtab-panel .ct-guide').waitFor({ state: 'visible', timeout: 8000 });
+    const title = await page.locator('#chordtab-panel .ct-guide-title').textContent();
+    assert.match(title, /două minute/i, `titlul ghidului: „${title}”`);
+    assert.ok((await page.locator('#chordtab-panel .ct-guide-item').count()) >= 4,
+      'ghidul trebuie să explice cei doi pași, exersarea și limitările');
+    const text = await page.locator('#chordtab-panel .ct-guide').textContent();
+    assert.match(text, /Pasul 1/, 'ghidul trebuie să explice Pasul 1');
+    assert.match(text, /Pasul 2/, 'ghidul trebuie să explice Pasul 2');
+    // Portocaliul „exotic orange” din brandul Not a Coder, nu albastrul panoului.
+    const border = await page.locator('#chordtab-panel .ct-guide-toggle')
+      .evaluate((el) => getComputedStyle(el).borderTopColor);
+    assert.equal(border, 'rgb(245, 79, 27)', `butonul ghidului e ${border}, aștept portocaliul de brand`);
+  });
+
+  await check('„Am înțeles" închide ghidul, și rămâne închis data viitoare', async () => {
+    await page.click('#chordtab-panel .ct-guide-done');
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-guide')?.hidden === true,
+      null, { timeout: 5000 });
+    await page.reload();
+    await page.locator('#chordtab-panel').waitFor({ state: 'attached', timeout: 15000 });
+    await page.waitForTimeout(1000); // timp berechet ca un ghid nedorit să fi apucat să apară
+    assert.equal(await page.locator('#chordtab-panel .ct-guide:visible').count(), 0,
+      'după „Am înțeles" ghidul nu mai are voie să se deschidă singur');
+    // Butonul rămâne, ca să-l poți redeschide oricând.
+    await page.click('#chordtab-panel .ct-guide-toggle');
+    await page.locator('#chordtab-panel .ct-guide').waitFor({ state: 'visible', timeout: 5000 });
+    await page.click('#chordtab-panel .ct-guide-toggle');
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-guide')?.hidden === true,
+      null, { timeout: 5000 });
+  });
+
   const currentChord = () => page.locator('#chordtab-panel .ct-current').textContent();
   const stripChips = () => page.locator('#chordtab-panel .ct-strip-chip');
   // „Ce urmează” se citește acum de pe BANDĂ: cartonașele de după cel aprins. Lista statică de
@@ -378,6 +414,12 @@ try {
     assert.ok((await page.locator('#chordtab-panel .ct-next-list .ct-chip').count()) > 0,
       'în timpul analizei rămâne lista cu acordurile de până acum');
 
+    // …și, mai important, panoul îi SPUNE omului unde e și ce urmează.
+    const step = await page.locator('#chordtab-panel .ct-step').textContent();
+    assert.match(step, /Pasul 1 din 2/, `linia pasului spune „${step}”`);
+    assert.match(step, /când melodia se termină/i,
+      'în Pasul 1 omul trebuie să afle ce se întâmplă când melodia se termină');
+
     // Salvarea e amânată 3s ca să nu scriem la fiecare acord.
     await page.waitForTimeout(4000);
 
@@ -393,6 +435,42 @@ try {
       () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === 'E');
     const status = await page.locator('#chordtab-panel .ct-status').textContent();
     assert.match(status, /memorate/i, `după refresh aștept modul memorat, am „${status}”`);
+  });
+
+  // --- Defectul de fond raportat de Andrei: „dacă nu dau reload, nu mai apare chestia aia
+  // frumoasă”. Cine lăsa melodia să se termine rămânea la nesfârșit în Pasul 1. ---
+  await check('La finalul melodiei analiza se încheie singură și trece în Pasul 2', async () => {
+    const live = [
+      { t: 0, label: 'C', confidence: 0.8 },
+      { t: 3, label: 'G', confidence: 0.8 },
+      { t: 6, label: 'Am', confidence: 0.8 },
+      { t: 9, label: 'F', confidence: 0.8 },
+    ];
+    await (await liveWorker()).evaluate(async ({ videoId, chords }) => {
+      const tabs = await chrome.tabs.query({});
+      const send = async (m) => {
+        for (const t of tabs) { try { await chrome.tabs.sendMessage(t.id, m); } catch { /* alt tab */ } }
+      };
+      await send({ target: 'content', type: 'CAPTURE_STATE', capturing: true });
+      for (const c of chords) await send({ target: 'content', type: 'CHORD_EVENT', videoId, ...c });
+    }, { videoId: VIDEO_ID, chords: live });
+
+    await page.waitForFunction(
+      () => /Pasul 1 din 2/.test(document.querySelector('#chordtab-panel .ct-step')?.textContent || ''),
+      null, { timeout: 10000 });
+
+    // Melodia se termină — fără ca omul să apese ceva.
+    await page.evaluate(() => {
+      document.querySelector('video').dispatchEvent(new Event('ended'));
+    });
+
+    await page.waitForFunction(
+      () => /Pasul 2 din 2/.test(document.querySelector('#chordtab-panel .ct-step')?.textContent || ''),
+      null, { timeout: 10000 });
+    // Și partea frumoasă chiar apare, fără reload.
+    await page.locator('#chordtab-panel .ct-strip-wrap').waitFor({ state: 'visible', timeout: 5000 });
+    const status = await page.locator('#chordtab-panel .ct-status').textContent();
+    assert.match(status, /memorate/i, `după finalul melodiei aștept modul memorat, am „${status}”`);
   });
 
   // --- PAȘII 1-2: structura melodiei (bara + legenda + secțiunea curentă) ---
@@ -742,6 +820,10 @@ try {
     await page.waitForFunction(
       () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === '—',
       null, { timeout: 8000 });
+    // Pe o melodie neanalizată, linia pasului spune de unde se începe.
+    const step = await page.locator('#chordtab-panel .ct-step').textContent();
+    assert.match(step, /Pasul 1 din 2/, `pe o melodie nouă linia pasului spune „${step}”`);
+    assert.match(step, /Analizează/, 'trebuie să spună exact ce buton să apese');
   });
 } catch (err) {
   failures++;

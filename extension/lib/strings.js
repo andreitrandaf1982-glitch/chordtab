@@ -3,6 +3,48 @@
 export const STR = {
   title: 'ChordTab',
 
+  // --- ghidul: extensia trebuie să-și explice SINGURĂ cele două faze ---
+  //
+  // Fără asta, cine o încearcă prima oară vede în timpul analizei doar niște acorduri care
+  // trec și nu are de unde să știe că partea frumoasă (banda, secțiunile, exersarea) vine
+  // abia după ce melodia s-a terminat. Linia „Pasul N" e mereu vizibilă; butonul portocaliu
+  // deschide povestea întreagă.
+  guideButton: 'Cum se folosește',
+  guideClose: 'Am înțeles',
+  guideTitle: 'ChordTab în două minute',
+  guideSteps: [
+    ['Pasul 1 — ascult melodia',
+      'Dă play și apasă „Analizează". Extensia ascultă sunetul tabului și scoate acordurile, '
+      + 'local, în browserul tău. Poți cânta pe ele din prima, dar apar cu vreo secundă '
+      + 'întârziere: au nevoie de context ca să nu se răzgândească la fiecare notă.'],
+    ['Pasul 2 — melodia întreagă',
+      'Când melodia se termină, analiza se oprește singură și panoul se schimbă: acordurile '
+      + 'curg pe bandă spre linia „acum", apare structura (strofă, refren) și foaia melodiei. '
+      + 'Dacă vrei mai devreme, apasă „Oprește". Ce s-a analizat rămâne memorat, deci a doua '
+      + 'oară melodia se deschide gata învățată.'],
+    ['Exersează pe bucăți',
+      'În foaie, butonul ⟳ de lângă o secțiune o pune pe repetat. O poți încetini la 0,75× '
+      + 'sau 0,5× fără să se schimbe tonalitatea. „Gata" te scoate și îți dă înapoi viteza '
+      + 'pe care o aveai.'],
+    ['Capo și ton',
+      'Capo îți spune pe ce poziție să-l pui ca să cânți forme deschise — sugestia e doar '
+      + 'marcată, se aplică la un click. „Ton" transpune melodia, dacă vrei s-o cânți în '
+      + 'altă tonalitate.'],
+    ['Ce nu face',
+      'Scoate acordurile principale, nu solouri sau tabs notă-cu-notă. Presupune acordaj '
+      + 'standard. Pe mixuri foarte dense acuratețea scade.'],
+  ],
+  guidePrivacy: 'Nu cere cont, nu cere nicio cheie și nu trimite nimic nicăieri. '
+    + 'Sunetul e analizat în browserul tău.',
+
+  stepIdle: 'Pasul 1 din 2 — apasă „Analizează" și lasă melodia să curgă până la capăt: '
+    + 'învăț acordurile ascultând.',
+  stepListening: (n) => `Pasul 1 din 2 — învăț melodia${n > 1 ? ` (${n} acorduri până acum)` : ''}. `
+    + 'Poți cânta pe acordurile de mai jos. Când melodia se termină, trec singură la Pasul 2: '
+    + 'banda, secțiunile și exersarea.',
+  stepPlayback: 'Pasul 2 din 2 — melodia e învățată. Click pe orice acord sau secțiune ca să '
+    + 'sari acolo; ⟳ pune o secțiune pe repetat.',
+
   // stări
   idle: 'Apasă „Analizează" ca să scot acordurile',
   listening: 'Ascult… (acordurile apar cu ~1s întârziere)',

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChordTab — acorduri pentru YouTube",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Detectează local acordurile melodiei de pe YouTube: bandă rulantă sincronizată, exersare pe secțiuni cu încetinire, diagrame pe corzi, capo și structura melodiei. Zero servere, zero chei.",
   "permissions": ["tabCapture", "offscreen", "storage", "activeTab"],
   "icons": {

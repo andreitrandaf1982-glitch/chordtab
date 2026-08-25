@@ -47,6 +47,7 @@ const state = {
   stripPx: 40,        // scara benzii rulante, în pixeli pe secundă
   practice: null,     // { index, start, end, label, prevRate } — secțiunea pusă pe repetat
   practiceRate: 1,    // viteza aleasă pentru exersare (ține între secțiuni)
+  clockVideo: null,   // elementul <video> pe care ascultăm „ended” cât timp analizăm
   timeInterval: null,
   saveTimer: null,
   rafId: null,
@@ -214,8 +215,11 @@ function buildPanel() {
     <div class="ct-head">
       <span class="ct-title">${STR.title}</span>
       <span class="ct-status"></span>
+      <button class="ct-guide-toggle" type="button">${STR.guideButton}</button>
       <button class="ct-action" type="button"></button>
     </div>
+    <div class="ct-guide" hidden></div>
+    <div class="ct-step"></div>
     <div class="ct-now">
       <div class="ct-chord-block">
         <div class="ct-current" tabindex="0">${STR.noChordsYet}</div>
@@ -266,6 +270,9 @@ function buildPanel() {
     panel,
     status: panel.querySelector('.ct-status'),
     action: panel.querySelector('.ct-action'),
+    guide: panel.querySelector('.ct-guide'),
+    guideToggle: panel.querySelector('.ct-guide-toggle'),
+    step: panel.querySelector('.ct-step'),
     current: panel.querySelector('.ct-current'),
     nextLabel: panel.querySelector('.ct-next-label'),
     nextList: panel.querySelector('.ct-next-list'),
@@ -292,8 +299,10 @@ function buildPanel() {
   panel.querySelector('.ct-tr-up').addEventListener('click', () => nudgeTranspose(1));
   panel.querySelector('.ct-reset').addEventListener('click', resetControls);
   panel.querySelector('.ct-practice-stop').addEventListener('click', () => stopPractice());
+  ui.guideToggle.addEventListener('click', () => toggleGuide());
   buildCapoButtons();
   buildSpeedButtons();
+  buildGuide();
 
   // Îl atașăm imediat (overlay) ca să fie vizibil din prima, apoi îl mutăm sub video
   // când #below apare. Dacă nu apare deloc, rămâne overlay — comportamentul de rezervă.
@@ -345,6 +354,7 @@ function render() {
   if (mode === 'playback') renderPlayback();
   else renderLive();
 
+  renderStep();
   buildStrip();
   buildStructure();
   buildSheet();
@@ -417,6 +427,70 @@ function resetControls() {
   state.transpose = 0;
   state.capo = 0; // înapoi la acordurile care se aud cu adevărat
   render();
+}
+
+// --- Ghidul de folosire -------------------------------------------------------
+//
+// Extensia are DOUĂ faze, iar a doua e cea frumoasă. Cine o încearcă prima oară vede în
+// timpul analizei doar niște acorduri care trec și n-are de unde să știe că banda, secțiunile
+// și exersarea apar abia după ce melodia s-a terminat — a rămas cu impresia că asta e tot.
+// De-asta linia „Pasul N din 2" e MEREU vizibilă, iar butonul portocaliu deschide povestea
+// întreagă. (Reparat și la rădăcină: analiza se oprește acum singură la finalul melodiei,
+// deci nu mai e nevoie de niciun gest ca să ajungi în Pasul 2.)
+
+function buildGuide() {
+  ui.guide.innerHTML = '';
+  const h = document.createElement('div');
+  h.className = 'ct-guide-title';
+  h.textContent = STR.guideTitle;
+  ui.guide.appendChild(h);
+
+  for (const [title, body] of STR.guideSteps) {
+    const item = document.createElement('div');
+    item.className = 'ct-guide-item';
+    const t = document.createElement('span');
+    t.className = 'ct-guide-item-title';
+    t.textContent = title;
+    const b = document.createElement('span');
+    b.className = 'ct-guide-item-body';
+    b.textContent = body;
+    item.append(t, b);
+    ui.guide.appendChild(item);
+  }
+
+  const priv = document.createElement('div');
+  priv.className = 'ct-guide-privacy';
+  priv.textContent = STR.guidePrivacy;
+  ui.guide.appendChild(priv);
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'ct-btn ct-guide-done';
+  close.textContent = STR.guideClose;
+  close.addEventListener('click', () => toggleGuide(false));
+  ui.guide.appendChild(close);
+
+  // Prima oară se deschide singur: cine tocmai a instalat extensia n-are de unde să știe
+  // că trebuie să citească ceva. După ce l-a închis o dată, nu mai insistăm.
+  chrome.storage.local.get('guideSeen').then(({ guideSeen }) => {
+    if (!guideSeen && ui.guide?.isConnected) toggleGuide(true, false);
+  }).catch(() => {});
+}
+
+function toggleGuide(open = ui.guide.hidden, remember = true) {
+  ui.guide.hidden = !open;
+  ui.guideToggle.classList.toggle('is-open', open);
+  ui.guideToggle.setAttribute('aria-expanded', String(open));
+  if (remember && !open) chrome.storage.local.set({ guideSeen: true }).catch(() => {});
+}
+
+/** Linia „Pasul N din 2” — singurul loc care spune, mereu, ce se întâmplă și ce urmează. */
+function renderStep() {
+  if (!ui.step) return;
+  ui.step.textContent =
+    state.mode === 'listening' ? STR.stepListening(state.chords.length) :
+    state.mode === 'playback' ? STR.stepPlayback : STR.stepIdle;
+  ui.step.dataset.mode = state.mode;
 }
 
 // --- Modul de exersare --------------------------------------------------------
@@ -1004,8 +1078,24 @@ function onActionClick() {
     chrome.runtime.sendMessage({ target: 'background', type: 'REQUEST_STOP' }).catch(() => {});
     return;
   }
+  // Cine apasă „Analizează” a înțeles ce are de făcut — nu-i mai deschidem ghidul.
+  chrome.storage.local.set({ guideSeen: true }).catch(() => {});
   chrome.runtime.sendMessage({ target: 'background', type: 'REQUEST_START' })
     .catch((err) => log.warn('Nu am putut cere pornirea capturii:', err?.message));
+}
+
+// Finalul melodiei ÎNCHEIE analiza singur. Înainte, cine lăsa melodia să se termine rămânea
+// la nesfârșit în Pasul 1: acordurile treceau, dar banda și secțiunile nu apăreau niciodată,
+// fiindcă nimeni nu-i spusese că trebuie să apese „Oprește”. Ăsta era defectul de fond.
+function onVideoEnded() {
+  if (state.mode !== 'listening') return;
+  log.info('Melodia s-a terminat — închei analiza singur.');
+  chrome.runtime.sendMessage({ target: 'background', type: 'REQUEST_STOP' }).catch(() => {});
+  // Trecem local în Pasul 2 fără să așteptăm confirmarea: dacă service workerul a fost
+  // reciclat și mesajul se pierde, omul tot trebuie să-și vadă melodia. Dublura e inofensivă
+  // — stopClock() iese din prima dacă nu mai suntem în „ascult”, iar CHORD_EVENT-urile
+  // întârziate sunt oricum ignorate în afara modului „ascult”.
+  stopClock();
 }
 
 function onMessage(msg) {
@@ -1055,6 +1145,8 @@ function startClock() {
   ui.barKey = null;       // reanaliza trebuie să reconstruiască bara, nu s-o creadă valabilă
   ui.sheetKey = null;
   ui.stripKey = null;
+  state.clockVideo = getVideo();
+  state.clockVideo?.addEventListener('ended', onVideoEnded);
   clearInterval(state.timeInterval);
   state.timeInterval = setInterval(() => {
     const video = getVideo();
@@ -1073,6 +1165,8 @@ function startClock() {
 
 function stopClock() {
   if (state.mode !== 'listening') return;
+  state.clockVideo?.removeEventListener('ended', onVideoEnded);
+  state.clockVideo = null;
   clearInterval(state.timeInterval);
   state.timeInterval = null;
   log.info(`Ceasul CT_TIME oprit. ${state.chords.length} acorduri strânse.`);

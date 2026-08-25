@@ -34,7 +34,35 @@ contra-intuitivă, greoaie, nu face mai mult decât să arate acorduri static; f
 | 0 — nume de secțiuni | ✅ Poarta 0 trecută (31 verificări UI + captură) | `d061912` |
 | 1–3 — banda rulantă | ✅ Poarta 3 trecută (36 verificări, inclusiv reduced-motion) | `c370928` |
 | 4 — exersare | ✅ Poarta 4 trecută (42 verificări) | `0097d6f` |
-| 5 — ambalare | ✅ Poarta 5 trecută | acest commit |
+| 5 — ambalare | ✅ Poarta 5 trecută | `5ec9139` |
+| 6 — ghidul + oprirea automată (v0.5.0) | ✅ Poarta 6 trecută (46 verificări) | acest commit |
+
+## Pasul 6 — extensia își explică singură cele două faze (v0.5.0)
+
+Andrei, după ce a folosit v0.4.0: „dacă nu dau reload, nu mai apare chestia aia frumoasă…
+gândește-te că asta e pentru cineva care o să testeze extensia la concurs și să înțeleagă ce
+are de făcut”. Defectul de fond: cine lăsa melodia să se termine rămânea la nesfârșit în faza
+de analiză — acordurile treceau, dar banda și secțiunile nu apăreau niciodată, fiindcă nimeni
+nu-i spusese că trebuie să apese „Oprește”.
+
+Reparat pe trei niveluri, de la cauză spre simptom:
+
+1. **La rădăcină:** analiza se încheie SINGURĂ la finalul melodiei (`ended` pe `<video>`).
+   Nu mai e nevoie de niciun gest ca să ajungi în Pasul 2. Trecerea locală se face fără să
+   așteptăm confirmarea backgroundului: dacă service workerul a fost reciclat și mesajul se
+   pierde, omul tot trebuie să-și vadă melodia.
+2. **Mereu vizibil:** linia „Pasul N din 2”, care spune ce se întâmplă ACUM și ce urmează.
+   În Pasul 1 e portocalie (ai ceva de aflat), în Pasul 2 devine discretă.
+3. **La cerere:** butonul portocaliu „Cum se folosește” deschide ghidul întreg — cei doi pași,
+   exersarea, capo/ton, ce NU face, confidențialitatea. Se deschide singur la prima folosire
+   (`guideSeen` în storage) și nu mai insistă după ce l-ai închis o dată.
+
+Culoarea: **`#F54F1B`**, „exotic orange” din brandul Not a Coder (luat din biblioteca lui de
+brand, `~/.claude/skills/video-nac/lib/nac_brand.py`, nu inventat).
+
+Bonus de robustețe descoperit pe drum: `REQUEST_STOP` comuta orbește, deci o cerere de oprire
+sosită după ce captura se încheiase deja PORNEA una nouă. Acum intenția se transmite explicit
+(`want`), iar clickul pe iconiță rămâne singurul care comută.
 
 **Abatere conștientă de la plan, la Pasul 4:** butonul ⟳ e doar pe rândurile foii, nu și pe
 segmentele barei — un `<button>` în interiorul altui `<button>` e HTML invalid. Bara rămâne

@@ -4,11 +4,23 @@ Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browseru
 (zero servere, zero chei API, zero costuri) și îți arată acordurile venind pe o bandă
 sincronizată cu melodia — cu diagrame pe corzi, exersare pe secțiuni, capo și transpoziție.
 
-**Stare:** v0.4.0 — banda rulantă și modul de exersare
+**Stare:** v0.5.0 — banda rulantă, modul de exersare și ghidul din panou
 ([plan](docs/PLAN-banda-si-exersare.md)), peste structura melodiei și reparațiile
 [auditului adversarial](docs/PLAN-reparatii-audit.md).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md) ·
 Ce e de verificat: [docs/VERIFICARE.md](docs/VERIFICARE.md)
+
+## Cum se folosește, în două mișcări
+
+![Ghidul din panou](docs/capturi/panou-ghid.png)
+
+**Pasul 1** — deschizi melodia, dai play, apeși „Analizează". Extensia ascultă și scoate
+acordurile; poți cânta pe ele din prima. **Pasul 2** — când melodia se termină, analiza se
+oprește **singură** și panoul se schimbă: bandă, structură, foaie, exersare. A doua oară
+melodia se deschide gata învățată.
+
+Panoul îți spune mereu în ce pas ești, iar butonul portocaliu **„Cum se folosește"** deschide
+povestea întreagă, oricând.
 
 ![Panoul ChordTab sub video](docs/capturi/panou.png)
 
@@ -102,6 +114,9 @@ Totul e cod propriu, fără biblioteci externe și fără WebAssembly. Nimic nu 
 
 ## Ce face, pe scurt
 
+- **Ghid în panou**: linia „Pasul N din 2" spune mereu ce se întâmplă și ce urmează; butonul
+  portocaliu „Cum se folosește" deschide instrucțiunile întregi. Analiza se încheie singură
+  la finalul melodiei.
 - **Banda rulantă**: acordurile vin spre linia „acum", late cât țin de mult. Click pe oricare
   te duce acolo. Cu „mișcare redusă" pornită în sistem, banda nu curge — sare la fiecare acord.
 - **Diagrama pe corzi** a acordului curent, mereu vizibilă; hover pe unul care urmează ți-o arată

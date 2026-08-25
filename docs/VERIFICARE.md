@@ -1,10 +1,44 @@
-# Verificare în Chrome — **v0.4.0: banda rulantă și exersarea**
+# Verificare în Chrome — **v0.5.0: extensia își explică singură ce face**
 
 Document viu: descrie mereu ce e de verificat ACUM.
 
 ---
 
-## Ce e nou
+## Ce e nou în v0.5.0 (reparația defectului pe care l-ai găsit)
+
+Ai spus: „dacă nu dau reload, nu mai apare chestia aia frumoasă… gândește-te că asta e pentru
+cineva care o să testeze extensia la concurs și să înțeleagă ce are de făcut”. Aveai dreptate,
+și era un defect de fond, nu de explicație: cine lăsa melodia să se termine rămânea la
+nesfârșit în faza de analiză, cu acorduri care trec și nimic altceva.
+
+Reparat pe trei niveluri:
+
+**1. Nu mai trebuie să dai reload deloc.** Când melodia se termină, analiza **se oprește
+singură** și panoul trece de la sine în faza a doua: bandă, structură, foaie, exersare.
+
+**2. Panoul îți spune mereu unde ești.** O linie sub antet, portocalie cât timp ai ceva de
+aflat: „Pasul 1 din 2 — învăț melodia (24 de acorduri până acum). Poți cânta pe acordurile de
+mai jos. Când melodia se termină, trec singură la Pasul 2.” În faza a doua devine discretă.
+
+**3. Butonul portocaliu „Cum se folosește”** — instrucțiunile întregi, oricând.
+
+![Ghidul din panou](capturi/panou-ghid.png)
+
+Se deschide **singur prima oară**, ca cineva care tocmai a instalat extensia să nu fie nevoit
+să ghicească. După „Am înțeles" nu mai insistă, dar butonul rămâne acolo. Culoarea e portocaliul
+**#F54F1B** din brandul tău Not a Coder — l-am luat din biblioteca ta de brand, nu l-am inventat.
+
+### Ce te rog să verifici la asta
+
+1. **Prima probă, cea importantă:** pornește o analiză pe o melodie **scurtă** și las-o să
+   se termine **fără să apeși nimic**. Trebuie să treacă singură în Pasul 2.
+2. **Linia pasului** — în timpul analizei spune „Pasul 1 din 2" și numără acordurile găsite?
+3. **„Cum se folosește"** — se deschide, se citește, „Am înțeles" îl închide?
+4. Reîncarcă pagina — ghidul **nu** mai trebuie să se deschidă singur, dar butonul e acolo.
+
+---
+
+## Ce era nou în v0.4.0
 
 Feedbackul tău pe v0.3.0 a fost: „pare contra-intuitivă, greoaie, nu face mai mult decât să
 arate acorduri static… foaia pare învechită. VREAU MULT MAI MULT CALITATIV.” Astea sunt
@@ -77,7 +111,7 @@ nu reapară.
 
 ## Starea proiectului
 
-`npm test` = 42 de verificări doar în interfață, plus testele de algoritm.
+`npm test` = 46 de verificări doar în interfață, plus testele de algoritm.
 `npm run test:package` verifică arhiva, inclusiv separatoarele din zip.
 
 ## Ce a rămas dinadins nereparat

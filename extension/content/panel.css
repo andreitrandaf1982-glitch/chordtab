@@ -7,6 +7,8 @@
   --ct-blue: #3058f0;        /* albastrul de brand */
   --ct-blue-bright: #4f74ff; /* pentru hover */
   --ct-blue-dark: #1e3ab0;   /* borduri și fundaluri de chip */
+  --ct-orange: #f54f1b;      /* „exotic orange” din brandul Not a Coder — doar pentru ghid */
+  --ct-orange-bright: #ff7043;
 
   background: var(--ct-ink);
   color: var(--ct-paper);
@@ -68,6 +70,98 @@
 }
 
 .ct-action:hover { background: var(--ct-blue-bright); }
+
+/* --- ghidul: „cum se folosește” + linia cu pasul curent --- */
+
+.ct-guide-toggle {
+  background: transparent;
+  color: var(--ct-orange);
+  border: 1px solid var(--ct-orange);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ct-guide-toggle:hover {
+  background: var(--ct-orange);
+  color: var(--ct-paper);
+}
+
+.ct-guide-toggle.is-open {
+  background: var(--ct-orange);
+  color: var(--ct-paper);
+}
+
+.ct-guide {
+  border: 1px solid var(--ct-orange);
+  border-radius: 10px;
+  background: rgba(245, 79, 27, 0.08);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.ct-guide[hidden] { display: none; }
+
+.ct-guide-title {
+  color: var(--ct-orange-bright);
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.ct-guide-item {
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 7px;
+}
+
+.ct-guide-item-title {
+  font-weight: 700;
+  color: var(--ct-orange-bright);
+}
+
+.ct-guide-item-title::after { content: ' — '; }
+
+.ct-guide-item-body { opacity: 0.85; }
+
+.ct-guide-privacy {
+  font-size: 12px;
+  opacity: 0.7;
+  border-top: 1px solid rgba(245, 79, 27, 0.3);
+  padding-top: 8px;
+  margin-top: 10px;
+}
+
+.ct-guide-done {
+  margin-top: 10px;
+  border-color: var(--ct-orange);
+  color: var(--ct-orange);
+  font-weight: 700;
+}
+
+.ct-guide-done:hover { border-color: var(--ct-orange-bright); }
+
+/* Linia „Pasul N din 2”, mereu vizibilă. Portocalie cât timp omul are ceva de aflat
+   (nu a analizat încă / analiza e în curs); discretă odată ce melodia e învățată. */
+.ct-step {
+  font-size: 12.5px;
+  line-height: 1.4;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border-left: 3px solid var(--ct-orange);
+  background: rgba(245, 79, 27, 0.10);
+  color: var(--ct-paper);
+}
+
+.ct-step[data-mode="playback"] {
+  border-left-color: rgba(244, 242, 236, 0.35);
+  background: rgba(244, 242, 236, 0.05);
+  opacity: 0.75;
+}
 
 /* --- acordul curent + ce urmează --- */
 

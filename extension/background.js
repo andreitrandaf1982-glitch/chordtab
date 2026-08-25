@@ -56,7 +56,13 @@ function isWatchPage(url) {
   }
 }
 
-async function toggleCapture(tab, reason) {
+/**
+ * @param want `true` = pornește, `false` = oprește, `null` = comută (clickul pe iconiță).
+ * Intenția contează: panoul cere „oprește” și când melodia s-a terminat singură, moment în
+ * care captura poate fi deja încheiată. O comutare oarbă ar PORNI atunci o captură nouă —
+ * exact pe dos față de ce s-a cerut.
+ */
+async function toggleCapture(tab, reason, want = null) {
   // Gardă sincronă: două click-uri rapide porneau două startCapture concurente, iar calea de
   // eroare a celui de-al doilea închidea documentul offscreen al primului.
   if (state.busy) {
@@ -70,8 +76,14 @@ async function toggleCapture(tab, reason) {
       return;
     }
     await ready();
-    if (state.capturingTabId === tab.id) {
-      await stopCapture(reason);
+    const capturing = state.capturingTabId === tab.id;
+    if (want === false) {
+      if (capturing) await stopCapture(reason);
+      else log.debug('Cerere de oprire, dar nu capturăm pe tabul ăsta — nu fac nimic.');
+      return;
+    }
+    if (capturing) {
+      if (want !== true) await stopCapture(reason);
       return;
     }
     if (state.capturingTabId !== null) await stopCapture('captură nouă pe alt tab');
@@ -182,7 +194,9 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     }
     // Butoanele din panoul de sub video.
     if (msg.type === 'REQUEST_START' || msg.type === 'REQUEST_STOP') {
-      if (sender?.tab) toggleCapture(sender.tab, 'buton din panou');
+      if (sender?.tab) {
+        toggleCapture(sender.tab, 'cerere din panou', msg.type === 'REQUEST_START');
+      }
       return;
     }
   }
