@@ -6,6 +6,24 @@ total). **16 constatări brute, 0 infirmate, 2 retrogradate; după contopirea du
 14 defecte reale — 1 critic, 2 mari, 5 medii, 6 mici.** Toate verdictele au dovadă
 fișier:linie verificată de un sceptic independent.
 
+## STARE: toți cei 9 pași executați (Opus, 2026-08-25) — v0.5.1 livrată
+
+Toate porțile trecute, 50 de verificări UI verzi + algoritmii + arhiva. Cele trei reparații
+grele au fost verificate ȘI negativ (testul nou pus pe codul vechi trebuie să PICE):
+- foaia care derula pagina: cu `scrollIntoView` la loc, pagina sare de la 2000px la 601px ✓
+- bucla contopită circular: cu `lead` forțat la 0, testul pică pe „lead 0, aștept ~2" ✓
+
+Abateri de la plan, conștiente:
+- **Pasul 5** (cursa pe două taburi) nu a primit test automat: cere două taburi reale cu
+  invocări diferite de extensie, ceea ce Playwright nu poate simula cinstit. Reparația e
+  minimă și evidentă la citire (cerem permisiunea înainte să oprim captura veche); rămâne
+  probă manuală. Am respectat regula: n-am forțat un test fragil.
+- **Pasul 4**: proba adevărată (tab ascuns) nu se poate automatiza — testul acoperă calea
+  care rămâne vie acolo (`timeupdate` emis fără niciun tick rAF util), iar proba manuală e
+  scrisă în VERIFICARE.md.
+
+---
+
 Executat de Opus, pas cu pas; fiecare pas se încheie cu `npm test` verde și un commit.
 La blocaj: regula celor două încercări → `docs/BUG-<slug>.md` → escaladare pe Fable.
 Liniile de cod citate mai jos sunt orientative (fișierele se mai mișcă); citatele de cod

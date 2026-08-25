@@ -23,7 +23,8 @@ export const STR = {
       + 'Dacă vrei mai devreme, apasă „Oprește". Ce s-a analizat rămâne memorat, deci a doua '
       + 'oară melodia se deschide gata învățată.'],
     ['Exersează pe bucăți',
-      'În foaie, butonul ⟳ de lângă o secțiune o pune pe repetat. O poți încetini la 0,75× '
+      'La melodiile cu secțiuni, butonul ⟳ de lângă o secțiune din foaie o pune pe repetat. '
+      + 'O poți încetini la 0,75× '
       + 'sau 0,5× fără să se schimbe tonalitatea. „Gata" te scoate și îți dă înapoi viteza '
       + 'pe care o aveai.'],
     ['Capo și ton',
@@ -39,11 +40,15 @@ export const STR = {
 
   stepIdle: 'Pasul 1 din 2 — apasă „Analizează" și lasă melodia să curgă până la capăt: '
     + 'învăț acordurile ascultând.',
-  stepListening: (n) => `Pasul 1 din 2 — învăț melodia${n > 1 ? ` (${n} acorduri până acum)` : ''}. `
+  // „12 acorduri”, dar „24 DE acorduri”: de la 20 în sus numeralul cere „de”.
+  countOf: (n, word) => `${n}${n % 100 >= 1 && n % 100 <= 19 ? '' : ' de'} ${word}`,
+  stepListening: (n) => `Pasul 1 din 2 — învăț melodia${n > 1 ? ` (${STR.countOf(n, 'acorduri')} până acum)` : ''}. `
     + 'Poți cânta pe acordurile de mai jos. Când melodia se termină, trec singură la Pasul 2: '
     + 'banda, secțiunile și exersarea.',
   stepPlayback: 'Pasul 2 din 2 — melodia e învățată. Click pe orice acord sau secțiune ca să '
     + 'sari acolo; ⟳ pune o secțiune pe repetat.',
+  // Melodiile fără structură clară n-au secțiuni, deci n-au nici butonul ⟳ — nu-l promitem.
+  stepPlaybackFlat: 'Pasul 2 din 2 — melodia e învățată. Click pe orice acord ca să sari acolo.',
 
   // stări
   idle: 'Apasă „Analizează" ca să scot acordurile',

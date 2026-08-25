@@ -405,7 +405,9 @@ function setCurrent(sounding) {
   const label = displayLabel(sounding);
   ui.current.textContent = label;
   ui.current.dataset.chord = label;
-  showDiagram(label);
+  // Cât stă cursorul pe un acord, acordul curent nu-i fură diagrama.
+  const hovered = ui.hoverChip?.isConnected ? ui.hoverChip.dataset.chord : null;
+  showDiagram(hovered || label);
 }
 
 function fillChordList(soundingLabels) {
@@ -499,7 +501,9 @@ function renderStep() {
   if (!ui.step) return;
   ui.step.textContent =
     state.mode === 'listening' ? STR.stepListening(state.chords.length) :
-    state.mode === 'playback' ? STR.stepPlayback : STR.stepIdle;
+    state.mode === 'playback'
+      ? (hasUsefulStructure() ? STR.stepPlayback : STR.stepPlaybackFlat)
+      : STR.stepIdle;
   ui.step.dataset.mode = state.mode;
 }
 
@@ -930,12 +934,18 @@ function buildSheet() {
   // Foaie nouă = derulare nouă. Se resetează DOAR aici, nu la fiecare render: altfel
   // „rândul s-a schimbat” ar fi adevărat mereu și foaia s-ar re-derula la fiecare acord.
   ui.sheetRowLast = null;
+  ui.sheetTimes = new Map(); // index de rând -> momentele chip-urilor lui (fără tipar)
 
   if (!st) {
     // Fără structură: un singur rând cu toată melodia, tot clickabil.
-    const chips = chordsBetween(0, Infinity).map((c) => makeSheetChip(c.label, c.t));
+    const items = chordsBetween(0, Infinity);
+    ui.sheetTimes.set(0, items.map((c) => c.t));
     ui.sheet.appendChild(sheetRow({
-      tag: { text: STR.wholeSong, start: 0 }, group: null, chips, reps: 1, index: 0,
+      tag: { text: STR.wholeSong, start: 0 },
+      group: null,
+      chips: items.map((c) => makeSheetChip(c.label, c.t)),
+      reps: 1,
+      index: 0,
     }));
     return;
   }
@@ -957,7 +967,9 @@ function buildSheet() {
       });
     } else {
       // Zonă liberă (punte, intro, final): nu există tipar, deci arătăm ce sună de fapt.
-      chips = chordsBetween(s.start, s.end).map((c) => makeSheetChip(c.label, Math.max(c.t, s.start)));
+      const items = chordsBetween(s.start, s.end);
+      ui.sheetTimes.set(i, items.map((c) => Math.max(c.t, s.start)));
+      chips = items.map((c) => makeSheetChip(c.label, Math.max(c.t, s.start)));
     }
     ui.sheet.appendChild(sheetRow({
       tag: { text: sectionLabel(s), start: s.start },
@@ -987,13 +999,14 @@ function sheetChipIndexAt(section, t) {
     }
     return loop.length - 1;
   }
-  // Rând liber sau foaie plată: ultimul chip al cărui moment a trecut.
-  const chips = ui.sheet?.querySelector(`.ct-sheet-row${section ? `[data-index="${sectionIndexOf(section)}"]` : ''}`)
-    ?.querySelectorAll('.ct-sheet-chip');
-  if (!chips || !chips.length) return -1;
+  // Rând liber sau foaie plată: ultimul chip al cărui moment a trecut. Momentele sunt
+  // memorate la construcția foii — interogarea DOM se făcea la FIECARE cadru, înainte de
+  // cheia care trebuia s-o evite, contrar invariantei promise în bucla de redare.
+  const times = ui.sheetTimes?.get(section ? sectionIndexOf(section) : 0);
+  if (!times || !times.length) return -1;
   let idx = -1;
-  for (let i = 0; i < chips.length; i++) {
-    if (Number(chips[i].dataset.t) <= t) idx = i; else break;
+  for (let i = 0; i < times.length; i++) {
+    if (times[i] <= t) idx = i; else break;
   }
   return idx;
 }
@@ -1107,10 +1120,17 @@ function showDiagram(label) {
 
 // mouseenter/mouseleave nu se propagă și nu se declanșează la mișcarea în interiorul
 // aceluiași element — spre deosebire de mouseover/mouseout, care se aprindeau în lanț.
+// Ținem minte pe ce chip stă cursorul: altfel, la prima schimbare de acord, setCurrent
+// suprascria diagrama previzualizată — fix în secundele în care omul se uita la ea ca să-și
+// pregătească următoarea schimbare. Hover-ul nu se re-declanșează dacă mouse-ul stă pe loc.
 function attachChipHover(chip) {
-  chip.addEventListener('mouseenter', () => showDiagram(chip.dataset.chord));
-  chip.addEventListener('focus', () => showDiagram(chip.dataset.chord));
-  const back = () => showDiagram(ui.current?.dataset.chord);
+  const show = () => { ui.hoverChip = chip; showDiagram(chip.dataset.chord); };
+  chip.addEventListener('mouseenter', show);
+  chip.addEventListener('focus', show);
+  const back = () => {
+    if (ui.hoverChip === chip) ui.hoverChip = null;
+    showDiagram(ui.current?.dataset.chord);
+  };
   chip.addEventListener('mouseleave', back);
   chip.addEventListener('blur', back);
 }

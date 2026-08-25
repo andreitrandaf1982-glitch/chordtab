@@ -4,9 +4,10 @@ Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browseru
 (zero servere, zero chei API, zero costuri) și îți arată acordurile venind pe o bandă
 sincronizată cu melodia — cu diagrame pe corzi, exersare pe secțiuni, capo și transpoziție.
 
-**Stare:** v0.5.0 — banda rulantă, modul de exersare și ghidul din panou
-([plan](docs/PLAN-banda-si-exersare.md)), peste structura melodiei și reparațiile
-[auditului adversarial](docs/PLAN-reparatii-audit.md).
+**Stare:** v0.5.1 — banda rulantă, modul de exersare și ghidul din panou
+([plan](docs/PLAN-banda-si-exersare.md)), plus reparațiile
+[auditului 2](docs/PLAN-reparatii-audit-2.md) și ale
+[auditului 1](docs/PLAN-reparatii-audit.md).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md) ·
 Ce e de verificat: [docs/VERIFICARE.md](docs/VERIFICARE.md)
 
@@ -51,9 +52,10 @@ se schimbe tonalitatea**. Îl cânți până iese, apoi „Gata" te readuce la v
 3. Apasă **Load unpacked** și alege folderul dezarhivat.
 4. Prinde iconița în bară (click pe puzzle → pin), ca s-o ai la îndemână.
 
-**Cum se folosește:** deschide o melodie pe YouTube, dă play, apasă iconița. Extensia ascultă
-și afișează acordurile sub video. Când ai terminat, apasă din nou — acordurile rămân memorate,
-iar a doua oară apar instant, sincronizate exact.
+**Cum se folosește:** deschide o melodie pe YouTube, dă play și apasă **„Analizează"** în
+panoul de sub video (sau iconița din bară). Extensia ascultă și afișează acordurile. **Când
+melodia se termină, analiza se oprește singură** și apar banda rulantă, structura și
+exersarea. Acordurile rămân memorate: a doua oară melodia se deschide gata învățată.
 
 Nu-ți cere cont, nu-ți cere nicio cheie și nu trimite nimic nicăieri. Sunetul e analizat local.
 

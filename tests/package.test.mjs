@@ -58,6 +58,13 @@ try {
     `${bad.length} intrări cu separator „\\” (ex. ${bad[0]}) — arhiva moare pe macOS/Linux`);
   const names = zipEntryNames(ZIP);
   assert.ok(names.some((n) => n.endsWith('manifest.json')), 'manifest.json lipsește din arhivă');
+
+  // Limita Chrome Web Store pentru `description`: 132 de caractere. Cu „Load unpacked” nimeni
+  // n-o aplică, deci depășirea rămâne invizibilă până exact în clipa publicării.
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'extension', 'manifest.json'), 'utf8'));
+  assert.ok(manifest.description.length <= 132,
+    `description are ${manifest.description.length} caractere; Chrome Web Store acceptă cel mult 132`);
+  console.log(`  Descrierea din manifest încape în limita magazinului (${manifest.description.length}/132) ✔`);
   assert.ok(names.some((n) => n.endsWith('content/loader.js')),
     'căile imbricate lipsesc sau au separator greșit');
   console.log(`  Separatoarele din arhivă sunt conforme ZIP (${names.length} intrări) ✔`);

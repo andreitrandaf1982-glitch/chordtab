@@ -1,6 +1,52 @@
-# Verificare în Chrome — **v0.5.0: extensia își explică singură ce face**
+# Verificare în Chrome — **v0.5.1: reparațiile auditului 2**
 
 Document viu: descrie mereu ce e de verificat ACUM.
+
+---
+
+## Ce s-a reparat în v0.5.1
+
+Auditul adversarial pe toată extensia (3 auditori + 4 sceptici puși să-i infirme) a găsit
+**14 defecte reale, niciunul infirmat**. Toate în codul nou din ultimele trei versiuni.
+Cele pe care le-ai fi simțit:
+
+**Pagina YouTube nu-ți mai fuge de sub ochi.** Ăsta era cel critic: dacă derulai la comentarii
+cu melodia pornită, foaia trăgea pagina înapoi la panou la fiecare schimbare de acord. Cauza
+e o subtilitate a browserului — funcția pe care o folosisem ca să derulez *foaia* derulează
+de fapt tot ce se poate derula, inclusiv pagina. Acum se derulează doar foaia, și numai când
+se schimbă rândul (altfel fugea de sub cursor când o derulai singur).
+
+**Reclamele nu mai încheie analiza.** Reclamele rulează în același element video ca melodia,
+deci la capătul lor se emitea același semnal de „s-a terminat". Pre-roll: analiza se
+„termina" cu zero acorduri și butonul părea mort. Mid-roll: jumătate de melodie, prezentată
+drept învățată.
+
+**Melodia pusă pe repetare (click-dreapta → Loop) nu mai pierde tot.** Cu bucla pornită,
+browserul nu anunță niciodată sfârșitul melodiei — sare la început în tăcere. Panoul rămânea
+veșnic în Pasul 1, iar la reluare acordurile primei treceri se ștergeau și memoria bună era
+suprascrisă cu o jumătate de melodie.
+
+**Exersarea nu mai moare când treci pe alt tab** (browserul oprește animațiile în taburile
+ascunse, iar bucla trăia numai acolo). **„Analizează" pe alt tab nu mai omoară degeaba o
+analiză în curs.** **Memoria unei melodii nu mai aterizează pe alta** la navigări rapide.
+**Foaia nu mai e decalată** la melodiile a căror progresie pleacă și revine pe același acord
+(un blues E-A-E-B-A-E aprindea acordul greșit și clickul sărea aiurea).
+
+Plus mărunțișuri: README-ul preda în „Instalare" fluxul vechi („apasă iconița din nou"),
+contrazis de propria lui introducere — **foarte probabil de aici venea nedumerirea ta cu
+reload-ul**; linia Pasului 2 promitea butonul ⟳ și pe melodiile care n-au secțiuni; „24
+acorduri" fără „de"; descrierea din manifest depășea limita magazinului Chrome.
+
+### Ce te rog să verifici la astea
+
+1. **Proba critică:** melodie deja analizată, dă play, **derulează jos la comentarii**.
+   Pagina trebuie să stea pe loc, oricât de mult se schimbă acordurile.
+2. **Cu reclamă:** pornește analiza pe o melodie cu reclamă la început — după reclamă,
+   analiza trebuie să continue, nu să se „încheie".
+3. **Exersare pe alt tab:** pune un refren pe repetat, treci pe alt tab, ascultă — trebuie
+   să se audă repetând la nesfârșit.
+4. **Cu Loop pornit** (click-dreapta pe player → repetare): la reluare, panoul trece în
+   Pasul 2 cu acordurile primei treceri intacte.
 
 ---
 
@@ -111,7 +157,8 @@ nu reapară.
 
 ## Starea proiectului
 
-`npm test` = 46 de verificări doar în interfață, plus testele de algoritm.
+`npm test` = 50 de verificări doar în interfață, plus testele de algoritm. (Cifra se
+actualizează la fiecare versiune — se numără cu `await check(` în `tests/ui.test.mjs`.)
 `npm run test:package` verifică arhiva, inclusiv separatoarele din zip.
 
 ## Ce a rămas dinadins nereparat

@@ -1,6 +1,6 @@
 {
   "name": "chordtab",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Extensie Chrome care detectează local acordurile de chitară din videoclipurile YouTube.",
