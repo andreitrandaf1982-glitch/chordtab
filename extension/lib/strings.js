@@ -23,6 +23,8 @@ export const STR = {
 
   // structura melodiei
   structure: 'Structura',
+  sheet: 'Foaia melodiei',
+  wholeSong: 'Toată melodia',
   sectionNames: {
     intro: 'Intro',
     verse: 'Strofă',

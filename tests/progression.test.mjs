@@ -96,4 +96,48 @@ console.log(`  Schimbări prinse în ±0,5s: ${delays.join(', ')} ✔`);
 assert.ok(events.length <= 6, `${events.length} evenimente pentru 4 acorduri — netezirea nu-și face treaba`);
 console.log(`  Evenimente emise: ${events.length} (minim teoretic 4) ✔`);
 
+// --- Regresie din auditul adversarial: garda de durată minimă nu are voie să blocheze
+// PERMANENT un acord legitim. Scenariul: o detecție greșită se comite, iar acordul real
+// revine repede după ea. Varianta veche compara doi operanzi înghețați, deci acordul real
+// nu mai era emis niciodată cât ținea — o strofă întreagă pe acordul greșit.
+{
+  const events = [];
+  const a = new Analyzer({ sampleRate: SR, onChord: (e) => events.push(e) });
+  await a.init();
+
+  // Un Do scurt (cât să se comită), apoi Sol ținut mult timp.
+  const seg = (notes, seconds) => {
+    const n = Math.floor(seconds * SR);
+    const out = new Float32Array(n);
+    const freqs = notes.map(([x, o]) => freqOf(x, o));
+    for (let i = 0; i < n; i++) {
+      const t = i / SR;
+      let s = 0;
+      for (const f of freqs) for (let h = 1; h <= 6; h++) s += (1 / h) * Math.sin(2 * Math.PI * f * h * t);
+      out[i] = (s / (freqs.length * 2.5)) * 0.8;
+    }
+    return out;
+  };
+  const C = seg([['C', 3], ['E', 3], ['G', 3], ['C', 4]], 1.2);
+  const G = seg([['G', 2], ['B', 3], ['D', 4], ['G', 4]], 12);
+  const signal = new Float32Array(C.length + G.length);
+  signal.set(C, 0);
+  signal.set(G, C.length);
+
+  for (let off = 0; off + FRAME_SIZE <= signal.length; off += HOP_SIZE) {
+    a.push(signal.subarray(off, off + FRAME_SIZE), off / SR);
+  }
+
+  const labels = events.map((e) => e.label);
+  assert.ok(labels.includes('G'),
+    `Sol-ul ținut 12s nu a fost emis niciodată — garda de durată minimă blochează permanent. Emise: ${JSON.stringify(labels)}`);
+  // Momentele trebuie să rămână strict crescătoare: onset-ul nu are voie să retro-dateze
+  // sub acordul precedent.
+  for (let i = 1; i < events.length; i++) {
+    assert.ok(events[i].t > events[i - 1].t,
+      `momentele nu cresc: ${events[i - 1].t.toFixed(2)} -> ${events[i].t.toFixed(2)}`);
+  }
+  console.log(`  Acord ținut după unul scurt: emis (${labels.join(' → ')}), momente crescătoare ✔`);
+}
+
 console.log('progression.test.mjs: toate testele au trecut ✔');

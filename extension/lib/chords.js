@@ -52,7 +52,6 @@ export const DEFAULT_BASS_WEIGHT = 0.3;
 export function matchChord(chroma, opts = {}) {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   const bass = opts.bass ?? null;
-  const bassWeight = bass ? (opts.bassWeight ?? DEFAULT_BASS_WEIGHT) : 0;
 
   let norm = 0;
   for (const v of chroma) norm += v * v;
@@ -61,6 +60,12 @@ export function matchChord(chroma, opts = {}) {
 
   let bassMax = 0;
   if (bass) for (const v of bass) if (v > bassMax) bassMax = v;
+
+  // Un vector de bas plin de zerouri NU e informație de bas — e absența ei. Dacă i-am da
+  // totuși pondere, numărătorul ar pierde termenul de bas dar numitorul ar rămâne 1,3, adică
+  // pragul de N.C. ar urca pe ascuns de la 0,60 la 0,78 și acorduri limpezi ar dispărea pe
+  // pasaje întregi fără bas (fingerpicking în registru înalt, capo sus, voce+pian).
+  const bassWeight = (bass && bassMax > 0) ? (opts.bassWeight ?? DEFAULT_BASS_WEIGHT) : 0;
 
   let best = null, second = null;
   for (const t of TEMPLATES) {

@@ -129,4 +129,31 @@ for (const sampleRate of [44100, 48000]) {
   console.log('  Dimensiunile cadrului sunt sincronizate (analyzer ↔ worklet ↔ test) ✔');
 }
 
+// --- 6. Bas absent nu trebuie să umfle pragul (regresie din auditul adversarial) ---
+// Când nu există nicio notă în registrul grav, bassChroma întoarce un vector de zerouri.
+// Ăla e ABSENȚA informației de bas, nu informație. Dacă i s-ar da totuși pondere, scorul
+// s-ar împărți la 1,3 fără să câștige nimic, iar pragul de N.C. ar urca tăcut la 0,78.
+{
+  const sr = 44100;
+  const fft = new FFT(FRAME);
+  const signal = synth(['C', 'E', 'G'], sr);
+  const mag = fft.magnitudeSpectrum(signal.subarray(4096, 4096 + FRAME));
+  const chroma = chromaFromPeaks(spectralPeaks(mag, sr, FRAME));
+
+  const faraBas = matchChord(chroma);
+  const basZero = matchChord(chroma, { bass: new Float64Array(12) });
+
+  assert.equal(basZero.label, faraBas.label,
+    `bas zero a schimbat verdictul: ${faraBas.label} -> ${basZero.label}`);
+  assert.ok(Math.abs(basZero.score - faraBas.score) < 1e-9,
+    `bas zero a schimbat scorul: ${faraBas.score.toFixed(3)} -> ${basZero.score.toFixed(3)}`);
+
+  // Iar un bas REAL trebuie în continuare să conteze.
+  const basReal = new Float64Array(12);
+  basReal[0] = 1; // Do la bas
+  const cuBas = matchChord(chroma, { bass: basReal });
+  assert.equal(cuBas.label, 'C');
+  console.log(`  Bas absent nu umflă pragul (${faraBas.label} ${faraBas.score.toFixed(2)}), basul real contează ✔`);
+}
+
 console.log('chord-detection.test.mjs: toate testele au trecut ✔');

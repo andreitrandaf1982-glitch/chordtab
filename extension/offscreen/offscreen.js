@@ -13,7 +13,16 @@ let clock = null;   // { videoId, t, rate, receivedAt } — ultimul CT_TIME prim
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.target !== 'offscreen') return;
-  if (msg.type === 'START_CAPTURE') start(msg).catch((err) => log.error('Captura a eșuat:', err?.message || err));
+  if (msg.type === 'START_CAPTURE') {
+    start(msg).catch((err) => {
+      // Nu e destul să logăm: content a primit deja CAPTURE_STATE capturing:true și ar rămâne
+      // pe „ascult” la nesfârșit, așteptând acorduri care nu vin niciodată.
+      log.error('Captura a eșuat:', err?.message || err);
+      chrome.runtime.sendMessage({
+        target: 'background', type: 'CAPTURE_ERROR', reason: String(err?.message || err),
+      }).catch(() => {});
+    });
+  }
   if (msg.type === 'STOP_CAPTURE') stop();
   if (msg.type === 'CT_TIME') clock = { videoId: msg.videoId, t: msg.t, rate: msg.rate, receivedAt: performance.now() };
 });
@@ -83,10 +92,20 @@ function stop() {
   log.info('Captura audio s-a oprit.');
 }
 
-// Timpul curent al videoclipului, interpolat din ultimul CT_TIME. -1 = ceas absent (ex. reclamă).
+// Timpul curent al videoclipului, interpolat din ultimul CT_TIME. -1 = ceas absent.
+//
+// Un ceas VECHI e la fel de inutil ca unul absent. Content trimite CT_TIME la 250ms și tace
+// la pauză sau reclamă — dar fără verificarea de vechime interpolarea mergea înainte oricum,
+// deci acordurile RECLAMEI se scriau pe cronologia melodiei, la timpi care nici n-au fost
+// ascultați. Cu 750ms de răbdare (trei bătăi ratate), garda `videoTime >= 0` din analizor
+// face în sfârșit ce promite comentariul din content.js: aruncă acele cadre.
+const CLOCK_MAX_AGE_MS = 750;
+
 function videoTimeNow() {
   if (!clock) return -1;
-  return clock.t + ((performance.now() - clock.receivedAt) / 1000) * (clock.rate || 1);
+  const age = performance.now() - clock.receivedAt;
+  if (age > CLOCK_MAX_AGE_MS) return -1;
+  return clock.t + (age / 1000) * (clock.rate || 1);
 }
 
 function sendChordEvent({ t, label, confidence }) {

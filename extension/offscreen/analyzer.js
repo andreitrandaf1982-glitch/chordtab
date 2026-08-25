@@ -132,10 +132,25 @@ export class Analyzer {
     if (label === this.committed) return;
     if (now - this.candidate.sinceT < this.cfg.minHoldSeconds) return;
 
+    // Durata minimă a unui acord se măsoară în timp REAL, nu în onset-uri calculate.
+    //
+    // Varianta veche compara `onset - committedAt`, dar AMBII operanzi erau înghețați:
+    // `sinceT` nu se reîmprospătează cât timp candidatul rămâne același, iar `committedAt` se
+    // schimbă doar la o comitere nouă. Condiția nu putea deveni adevărată prin simpla trecere
+    // a timpului, așa că un acord legitim care revenea repede după o detecție greșită era
+    // suprimat DEFINITIV — o strofă întreagă afișată pe acordul greșit. Cu `now` în condiție,
+    // așteptarea chiar se scurge.
+    if (now - this.committedAt < this.cfg.minChordSeconds) return;
+
     // Momentul REAL al schimbării: fereastra privește în urmă, deci candidatul a început
-    // să câștige cu ~jumătate de fereastră mai devreme decât ne-am dat noi seama.
-    const onset = Math.max(0, this.candidate.sinceT - this.cfg.windowSeconds / 2);
-    if (onset - this.committedAt < this.cfg.minChordSeconds) return; // prea scurt: pâlpâire
+    // să câștige cu ~jumătate de fereastră mai devreme decât ne-am dat noi seama. Limităm
+    // retro-datarea ca noul acord să nu ajungă înaintea celui precedent (committedAt e
+    // -Infinity la început, deci Math.max îl ignoră corect).
+    const onset = Math.max(
+      0,
+      this.committedAt + this.cfg.minChordSeconds,
+      this.candidate.sinceT - this.cfg.windowSeconds / 2,
+    );
 
     this.committed = label;
     this.committedAt = onset;

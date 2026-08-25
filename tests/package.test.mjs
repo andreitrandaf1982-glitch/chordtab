@@ -49,6 +49,19 @@ try {
   assert.equal(unzip.status, 0, `dezarhivarea a eșuat: ${unzip.stderr}`);
   console.log(`  Arhiva se dezarhivează (${readdirSync(unzipped).length} intrări la rădăcină) ✔`);
 
+  // Verificare care NU poate fi mascată de simetria build/dezarhivare pe același OS:
+  // ne uităm direct în arhivă. Compress-Archive (PowerShell 5.1) scria `\` — nefolosibil
+  // pe macOS/Linux, dar invizibil aici, fiindcă Expand-Archive iartă backslash-ul.
+  const { badSeparatorEntries, zipEntryNames } = await import('../tools/zip-entries.mjs');
+  const bad = badSeparatorEntries(ZIP);
+  assert.equal(bad.length, 0,
+    `${bad.length} intrări cu separator „\\” (ex. ${bad[0]}) — arhiva moare pe macOS/Linux`);
+  const names = zipEntryNames(ZIP);
+  assert.ok(names.some((n) => n.endsWith('manifest.json')), 'manifest.json lipsește din arhivă');
+  assert.ok(names.some((n) => n.endsWith('content/loader.js')),
+    'căile imbricate lipsesc sau au separator greșit');
+  console.log(`  Separatoarele din arhivă sunt conforme ZIP (${names.length} intrări) ✔`);
+
   ctx = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: true,

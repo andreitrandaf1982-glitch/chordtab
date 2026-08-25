@@ -10,6 +10,7 @@ import { readFileSync, mkdirSync, rmSync, existsSync, readdirSync, statSync } fr
 import { spawnSync } from 'node:child_process';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { badSeparatorEntries } from './zip-entries.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EXT = join(ROOT, 'extension');
@@ -49,15 +50,29 @@ const out = join(DIST, `chordtab-${version}.zip`);
 if (existsSync(out)) rmSync(out);
 
 const isWindows = process.platform === 'win32';
+// Pe Windows folosim tar.exe (bsdtar, livrat in-box pe Win10/11), NU Compress-Archive:
+// Compress-Archive din PowerShell 5.1 scrie separatorul `\` în arhivă, încălcând specificația
+// ZIP, iar rezultatul nu se poate dezarhiva corect pe macOS/Linux. Verificat empiric:
+// PowerShell produce `sub\a.txt`, tar produce `sub/a.txt`. Nu reveni la Compress-Archive.
+// Trecem intrările de la rădăcină explicit, ca să nu apară prefixul `./` din `tar ... .`.
+const entries = readdirSync(EXT);
 const result = isWindows
-  ? spawnSync('powershell', ['-NoProfile', '-Command',
-    `Compress-Archive -Path '${EXT}\\*' -DestinationPath '${out}' -CompressionLevel Optimal`],
-  { encoding: 'utf8' })
+  ? spawnSync('tar', ['-a', '-c', '-f', out, '-C', EXT, ...entries], { encoding: 'utf8' })
   : spawnSync('zip', ['-r', '-q', out, '.'], { cwd: EXT, encoding: 'utf8' });
 
 if (result.status !== 0) {
   console.error('Împachetarea a eșuat:', result.stderr || result.error?.message);
   if (!isWindows) console.error('Ai nevoie de utilitarul `zip` instalat.');
+  process.exit(1);
+}
+
+// Verificare de regresie: dacă vreo intrare are `\`, arhiva e nefolosibilă în afara Windows-ului.
+// Preferăm să pice build-ul aici decât să afle un om din comunitate la instalare.
+const bad = badSeparatorEntries(out);
+if (bad.length) {
+  console.error(`OPRIT: ${bad.length} intrări din arhivă au separator „\\” (ex. ${bad[0]}).`);
+  console.error('Arhiva nu s-ar putea dezarhiva corect pe macOS/Linux.');
+  rmSync(out);
   process.exit(1);
 }
 

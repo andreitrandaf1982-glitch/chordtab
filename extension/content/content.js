@@ -48,7 +48,7 @@ init();
 
 function init() {
   state.videoId = getVideoId();
-  buildPanel();
+  syncPanelPresence();
   window.addEventListener('yt-navigate-finish', onNavigate);
   // Ultima șansă de salvare la închiderea paginii. E doar o plasă: scrierea în storage e
   // asincronă și s-ar putea să nu apuce. De aceea salvarea din mers, de mai sus, e cea care
@@ -81,6 +81,20 @@ function onNavigate() {
     videoId: newId, mode: 'idle', chords: [], capo: 0, suggestedCapo: 0,
     transpose: 0, analyzedAt: null, structure: null, lastIndex: -1, lastSection: -1,
   });
+  syncPanelPresence();
+}
+
+// Content scriptul se injectează pe TOT www.youtube.com, dar panoul are sens doar pe pagina
+// unui video. Fără verificarea asta, pe pagina principală / căutare / canal `#below` nu există
+// niciodată, iar panoul rămânea un dreptunghi plutitor fix peste conținut, cu un buton care
+// oricum nu putea porni nimic.
+function syncPanelPresence() {
+  if (!state.videoId) {
+    document.getElementById('chordtab-panel')?.remove();
+    ui.panel = null;
+    log.debug('Pagină fără video — nu construiesc panoul.');
+    return;
+  }
   buildPanel();
   loadCache();
 }
@@ -103,7 +117,9 @@ async function loadCache() {
       log.debug('Analiza a pornit între timp — nu încarc memoria peste ea.');
       return;
     }
-    state.chords = stored.chords;
+    // Plasă de siguranță pentru memoria scrisă de versiuni mai vechi, care puteau salva
+    // lista nesortată după o derulare înapoi: căutarea binară din redare cere sortare.
+    state.chords = [...stored.chords].sort((a, b) => a.t - b.t);
     state.analyzedAt = stored.analyzedAt;
     // Recalculăm sugestia din acorduri în loc s-o credem pe cea salvată: e ieftin și rămâne
     // corectă chiar dacă memoria a fost scrisă de o versiune mai veche sau din afară.
@@ -191,7 +207,10 @@ function buildPanel() {
     <div class="ct-structure" hidden>
       <span class="ct-group-label">${STR.structure}</span>
       <div class="ct-bar"></div>
-      <div class="ct-legend"></div>
+    </div>
+    <div class="ct-sheet-wrap" hidden>
+      <span class="ct-group-label">${STR.sheet}</span>
+      <div class="ct-sheet"></div>
     </div>
     <div class="ct-controls">
       <div class="ct-group ct-capo-group">
@@ -222,7 +241,8 @@ function buildPanel() {
     diagramSlot: panel.querySelector('.ct-diagram-slot'),
     structure: panel.querySelector('.ct-structure'),
     bar: panel.querySelector('.ct-bar'),
-    legend: panel.querySelector('.ct-legend'),
+    sheetWrap: panel.querySelector('.ct-sheet-wrap'),
+    sheet: panel.querySelector('.ct-sheet'),
     sectionNow: panel.querySelector('.ct-section-now'),
   });
 
@@ -285,9 +305,13 @@ function render() {
   else renderLive();
 
   buildStructure();
+  buildSheet();
   if (mode === 'playback') {
     const video = getVideo();
-    updateCurrentSection(video ? video.currentTime : 0);
+    const t = video ? video.currentTime : 0;
+    updateCurrentSection(t);
+    ui.sheetHighlight = null; // foaia s-a putut reconstrui: forțăm o evidențiere proaspătă
+    updateSheetHighlight(t);
   } else if (ui.sectionNow) {
     ui.sectionNow.hidden = true;
   }
@@ -402,8 +426,12 @@ function buildStructure() {
     return;
   }
   const st = state.structure;
-  // Cheia include capo și transpoziția: etichetele din legendă trec prin displayLabel().
-  const key = `${state.videoId}|${state.capo}|${state.transpose}|${st.sections.length}`;
+  // Cheia trebuie să vadă CONȚINUTUL secțiunilor, nu doar numărul lor: o reanaliză a aceleiași
+  // melodii dă aproape sigur tot atâtea secțiuni, iar cu o cheie bazată pe lungime bara veche
+  // rămânea pe ecran — inclusiv handler-ele de click, care duceau la granițele vechi. Exact
+  // defectul pe care utilizatorul încerca să-l repare reanalizând.
+  const shape = st.sections.map((s) => `${s.cluster || '-'}${s.start.toFixed(0)}`).join(',');
+  const key = `${state.videoId}|${state.capo}|${state.transpose}|${shape}`;
   if (ui.barKey === key) return;
   ui.barKey = key;
   ui.structure.hidden = false;
@@ -429,43 +457,185 @@ function buildStructure() {
     });
     ui.bar.appendChild(seg);
   });
+}
 
-  // Legenda: fiecare grup o singură dată, cu tiparul și de câte ori apare în melodie.
-  ui.legend.innerHTML = '';
-  for (const letter of letters) {
-    const first = st.sections.find((s) => s.cluster === letter);
-    const reps = st.sections.filter((s) => s.cluster === letter)
-      .reduce((sum, s) => sum + s.reps, 0);
-    const row = document.createElement('div');
-    row.className = 'ct-legend-row';
+// --- Foaia melodiei -----------------------------------------------------------
+//
+// Bara arată FORMA melodiei; foaia arată MELODIA — un rând per secțiune, în ordinea
+// cântecului (nu dedublat ca o legendă), cu acordurile pe chip-uri pe care poți da click ca
+// să sari exact acolo. Asta a cerut Andrei: „n-am ceva istoric să văd melodia sau să derulez
+// înainte-înapoi pe bucăți”. Apare și fără structură — atunci ca un singur rând cu tot
+// cântecul, fiindcă nevoia e aceeași.
 
-    const tag = document.createElement('span');
-    tag.className = 'ct-legend-tag';
-    tag.dataset.group = String(letters.indexOf(letter) % 5);
-    tag.textContent = sectionLabel(first || { cluster: letter, name: null });
-    row.appendChild(tag);
-
-    const chips = document.createElement('span');
-    chips.className = 'ct-legend-chips';
-    for (const item of st.patterns[letter].loop) {
-      const label = displayLabel(item.label);
-      const chip = document.createElement('span');
-      chip.className = 'ct-chip';
-      chip.textContent = label;
-      chip.dataset.chord = label;
-      chip.tabIndex = 0;
-      chip.classList.toggle('ct-has-diagram', hasDiagram(label));
-      attachChipHover(chip);
-      chips.appendChild(chip);
+/** Acordurile memorate din intervalul [from, to), cu repetițiile consecutive contopite. */
+function chordsBetween(from, to) {
+  const out = [];
+  for (const c of state.chords) {
+    if (c.t >= to) break;
+    if (c.t < from - 0.001) { // acordul care sună deja la începutul feliei
+      if (out.length) out[0] = { t: from, label: c.label };
+      else out.push({ t: from, label: c.label });
+      continue;
     }
-    row.appendChild(chips);
+    if (out.length && out[out.length - 1].label === c.label) continue;
+    out.push({ t: c.t, label: c.label });
+  }
+  return out;
+}
 
+function makeSheetChip(label, seekTo) {
+  const shown = displayLabel(label);
+  const chip = document.createElement('span');
+  chip.className = 'ct-chip ct-sheet-chip';
+  chip.textContent = shown;
+  chip.dataset.chord = shown;
+  chip.dataset.t = String(seekTo);
+  chip.tabIndex = 0;
+  chip.classList.toggle('ct-has-diagram', hasDiagram(shown));
+  attachChipHover(chip);
+  chip.addEventListener('click', () => {
+    const video = getVideo();
+    if (video) video.currentTime = Math.max(0, seekTo) + 0.05;
+  });
+  return chip;
+}
+
+function sheetRow({ tag, group, chips, reps, index }) {
+  const row = document.createElement('div');
+  row.className = 'ct-sheet-row';
+  row.dataset.index = String(index);
+
+  if (tag !== null) {
+    const label = document.createElement('button');
+    label.type = 'button';
+    label.className = 'ct-sheet-tag';
+    if (group !== null) label.dataset.group = String(group);
+    label.textContent = tag.text;
+    label.title = STR.jumpTo(tag.text);
+    label.addEventListener('click', () => {
+      const video = getVideo();
+      if (video) video.currentTime = tag.start + 0.05;
+    });
+    row.appendChild(label);
+  }
+
+  const list = document.createElement('span');
+  list.className = 'ct-sheet-chips';
+  for (const chip of chips) list.appendChild(chip);
+  row.appendChild(list);
+
+  if (reps > 1) {
     const count = document.createElement('span');
-    count.className = 'ct-legend-count';
+    count.className = 'ct-sheet-count';
     count.textContent = STR.times(reps);
     row.appendChild(count);
+  }
+  return row;
+}
 
-    ui.legend.appendChild(row);
+/** Construiește foaia. Idempotentă, ca bara — zero reconstrucții din bucla de redare. */
+function buildSheet() {
+  if (!ui.sheet) return;
+  // Foaia nu depinde de structură: și fără ea utilizatorul vrea să vadă melodia întreagă.
+  if (state.mode !== 'playback' || state.chords.length < 4) {
+    ui.sheetWrap.hidden = true;
+    ui.sheetKey = null;
+    return;
+  }
+  const st = hasUsefulStructure() ? state.structure : null;
+  const key = `${state.videoId}|${state.capo}|${state.transpose}|`
+    + (st ? st.sections.map((s) => `${s.cluster || '-'}${s.start.toFixed(0)}`).join(',')
+          : `plat:${state.chords.length}`);
+  if (ui.sheetKey === key) return;
+  ui.sheetKey = key;
+  ui.sheetWrap.hidden = false;
+  ui.sheet.innerHTML = '';
+
+  if (!st) {
+    // Fără structură: un singur rând cu toată melodia, tot clickabil.
+    const chips = chordsBetween(0, Infinity).map((c) => makeSheetChip(c.label, c.t));
+    ui.sheet.appendChild(sheetRow({
+      tag: { text: STR.wholeSong, start: 0 }, group: null, chips, reps: 1, index: 0,
+    }));
+    return;
+  }
+
+  const letters = Object.keys(st.patterns);
+  st.sections.forEach((s, i) => {
+    let chips;
+    if (s.cluster && st.patterns[s.cluster]) {
+      // Secțiune cu buclă: arătăm tiparul-consens, iar clickul duce la locul acordului în
+      // PRIMA trecere prin buclă.
+      let offset = 0;
+      chips = st.patterns[s.cluster].loop.map((item) => {
+        const chip = makeSheetChip(item.label, s.start + offset);
+        offset += item.seconds;
+        return chip;
+      });
+    } else {
+      // Zonă liberă (punte, intro, final): nu există tipar, deci arătăm ce sună de fapt.
+      chips = chordsBetween(s.start, s.end).map((c) => makeSheetChip(c.label, Math.max(c.t, s.start)));
+    }
+    ui.sheet.appendChild(sheetRow({
+      tag: { text: sectionLabel(s), start: s.start },
+      group: s.cluster ? letters.indexOf(s.cluster) % 5 : null,
+      chips,
+      reps: s.reps,
+      index: i,
+    }));
+  });
+}
+
+/** În ce chip din rândul dat cade momentul t? -1 dacă nu se poate spune. */
+function sheetChipIndexAt(section, t) {
+  const st = state.structure;
+  if (section && section.cluster && st?.patterns[section.cluster]) {
+    const { loop, period } = st.patterns[section.cluster];
+    if (!(period > 0)) return -1;
+    let phase = (t - section.start) % period;
+    if (phase < 0) phase += period;
+    let acc = 0;
+    for (let i = 0; i < loop.length; i++) {
+      acc += loop[i].seconds;
+      if (phase < acc) return i;
+    }
+    return loop.length - 1;
+  }
+  // Rând liber sau foaie plată: ultimul chip al cărui moment a trecut.
+  const chips = ui.sheet?.querySelector(`.ct-sheet-row${section ? `[data-index="${sectionIndexOf(section)}"]` : ''}`)
+    ?.querySelectorAll('.ct-sheet-chip');
+  if (!chips || !chips.length) return -1;
+  let idx = -1;
+  for (let i = 0; i < chips.length; i++) {
+    if (Number(chips[i].dataset.t) <= t) idx = i; else break;
+  }
+  return idx;
+}
+
+function sectionIndexOf(section) {
+  return state.structure?.sections.indexOf(section) ?? -1;
+}
+
+/** Evidențiază rândul și acordul curent. Scrie în DOM doar când chiar se schimbă ceva. */
+function updateSheetHighlight(t) {
+  if (!ui.sheet || ui.sheetWrap?.hidden) return;
+  const st = hasUsefulStructure() ? state.structure : null;
+  const rowIdx = st ? sectionIndexAt(t) : 0;
+  const section = st ? st.sections[rowIdx] : null;
+  const chipIdx = sheetChipIndexAt(section, t);
+  const key = `${rowIdx}|${chipIdx}`;
+  if (ui.sheetHighlight === key) return;
+  ui.sheetHighlight = key;
+
+  const rows = ui.sheet.children;
+  for (let i = 0; i < rows.length; i++) {
+    const isCurrent = i === rowIdx;
+    rows[i].classList.toggle('is-current', isCurrent);
+    const chips = rows[i].querySelectorAll('.ct-sheet-chip');
+    for (let k = 0; k < chips.length; k++) {
+      chips[k].classList.toggle('is-now', isCurrent && k === chipIdx);
+    }
+    if (isCurrent) rows[i].scrollIntoView({ block: 'nearest' });
   }
 }
 
@@ -570,9 +740,22 @@ function onMessage(msg) {
     return;
   }
   if (msg.type === 'CHORD_EVENT' && msg.videoId === state.videoId) {
+    // DOAR în modul „ascult”: după un refresh, captura poate rămâne o clipă în viață și ar
+    // împinge evenimente vechi peste cronologia tocmai încărcată din memorie.
+    if (state.mode !== 'listening') {
+      log.debug('CHORD_EVENT ignorat (nu ascult):', msg.label);
+      return;
+    }
     log.debug('CHORD_EVENT', msg.label, '@', msg.t);
+    // Invariantul „sortate după t” e obligatoriu: chordIndexAt e căutare binară, iar lista
+    // ajunge ca atare în memorie. La derulare înapoi analizorul re-analizează zona, deci
+    // evenimentele noi ÎNLOCUIESC coada veche în loc să se așeze după ea.
+    while (state.chords.length && state.chords[state.chords.length - 1].t >= msg.t) {
+      state.chords.pop();
+    }
     state.chords.push({ t: msg.t, label: msg.label, confidence: msg.confidence });
-    if (state.mode === 'listening') { render(); scheduleSave(); }
+    render();
+    scheduleSave();
   }
 }
 
@@ -584,6 +767,8 @@ function startClock() {
   state.suggestedCapo = 0;
   state.structure = null; // structura ține de melodia memorată, nu de analiza în curs
   state.lastSection = -1;
+  ui.barKey = null;       // reanaliza trebuie să reconstruiască bara, nu s-o creadă valabilă
+  ui.sheetKey = null;
   clearInterval(state.timeInterval);
   state.timeInterval = setInterval(() => {
     const video = getVideo();
@@ -632,6 +817,10 @@ function startPlayback() {
         state.lastAnnounce = announce;
         updateCurrentSection(t);
       }
+      // Foaia se evidențiază la nivel de ACORD, deci se schimbă mai des decât secțiunea —
+      // dar tot doar de câteva ori pe minut. updateSheetHighlight iese singură dacă nimic
+      // nu s-a schimbat, deci nu atinge DOM-ul la fiecare cadru.
+      updateSheetHighlight(t);
     }
     state.rafId = requestAnimationFrame(tick);
   };

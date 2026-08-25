@@ -133,9 +133,9 @@ try {
     const v = document.querySelector('video');
     return v && v.readyState >= 1;
   }, null, { timeout: 15000 });
-  await page.locator('#chordtab-panel .ct-structure').waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('#chordtab-panel .ct-sheet-wrap').waitFor({ state: 'visible', timeout: 10000 });
   await page.evaluate(() => { document.querySelector('video').currentTime = 36; }); // în refren
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(800);
   await panel.screenshot({ path: join(OUT, 'panou-structura.png') });
   console.log('  docs/capturi/panou-structura.png');
 } finally {

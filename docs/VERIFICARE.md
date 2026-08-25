@@ -1,76 +1,80 @@
-# Verificare în Chrome — **structura melodiei (v0.2.0)**
+# Verificare în Chrome — **v0.3.0: foaia melodiei + reparațiile auditului**
 
 Document viu: descrie mereu ce e de verificat ACUM.
 
 ---
 
-## Ce e nou
+## Ce e nou: foaia melodiei
 
-Funcția pe care ai cerut-o după Poarta 2: **tiparul pe secțiuni**.
+Asta ai cerut: „văd mereu doar patru acorduri… n-am ceva istoric să văd melodia sau să derulez
+înainte-înapoi pe bucăți."
 
-![Structura melodiei](capturi/panou-structura.png)
+![Foaia melodiei](capturi/panou-structura.png)
 
-**Bara structurii** arată din ce e făcută melodia: fiecare segment e o secțiune, colorată pe
-grup. Click pe un segment și sari direct acolo — util când exersezi doar refrenul.
+Sub bara de structură, acum vezi **cântecul întreg** — un rând pentru fiecare secțiune, în
+ordinea în care se cântă (nu dedublat ca înainte). Rândul în care ești e evidențiat, iar
+**acordul care sună chiar acum e aprins în albastru**, ca să știi mereu unde te afli.
 
-**Legenda** îți dă tiparul fiecărei secțiuni **o singură dată**: „A · Strofă: G D Am C, ×6".
-Asta ai cerut — nu un șir nesfârșit de acorduri pe care trebuie să le prinzi din zbor.
+**Click pe orice acord te duce exact acolo.** Ăsta e derulatul pe bucăți: vrei să exersezi al
+doilea refren, dai click pe el. Click pe eticheta secțiunii („B · Refren") sare la începutul ei.
 
-**Indicatorul** de lângă acord îți spune în ce secțiune ești acum („B · REFREN"), iar cu ~3
-secunde înainte de schimbare scrie „urmează: Strofă", ca să te pregătești.
+Melodiile lungi se derulează în interiorul foii, ca panoul să nu crească peste tot ecranul.
+Iar melodiile fără structură clară primesc tot o foaie — cu toate acordurile, tot clickabile.
 
-Numirea e **prudentă cu intenție**: „Strofă" și „Refren" apar doar când tiparul alternanței e
-limpede. Altfel vezi doar litera (A, B, C). Un nume greșit ar fi mai rău decât unul neutru.
+---
 
-Diagramele merg și în legendă — treci cu mouse-ul peste orice acord de acolo.
+## Ce s-a reparat din audit
+
+Auditul adversarial a găsit 10 defecte reale. Cele pe care le-ai putea observa:
+
+**Pauza de peste 30 de secunde nu mai rupe analiza.** Înainte, dacă puneai pauză și te
+întorceai, acordurile nu mai apăreau, iar butonul „Oprește" ștergea ce se strânsese. Starea
+capturii se ține acum într-un loc care supraviețuiește.
+
+**F5 în timpul analizei** nu mai lasă o captură-fantomă care consuma resurse și inversa butonul.
+
+**Reclamele nu se mai scriu peste melodie.** Ceasul intern îngheață când nu primește semnal,
+deci acordurile reclamei nu mai ajung pe cronologia cântecului.
+
+**Derularea înapoi în timpul analizei** nu mai strică ordinea acordurilor (și deci nici redarea
+memorată). Memoria veche, dacă era deja stricată, se repară singură la încărcare.
+
+**Panoul nu mai apare pe pagina principală YouTube** — doar pe paginile de video, unde are sens.
+
+Plus două defecte de matematică pe care nu le puteai vedea, dar le auzeai: un acord ținut mult
+timp putea fi suprimat definitiv după o detecție greșită, iar pasajele fără bas (fingerpicking,
+capo sus) primeau tăcut un prag mai sever și ieșeau „N.C." degeaba.
+
+Și una pentru comunitate: **arhiva se strica pentru utilizatorii de Mac și Linux**. Se
+construia cu o unealtă Windows care scrie căile greșit. Acum se construiește corect, iar
+build-ul refuză să producă o arhivă stricată.
 
 ---
 
 ## Ce te rog să verifici
 
-Reload la extensie, apoi pe o melodie deja memorată (sau analizează una nouă un minut-două):
+Reload la extensie, apoi pe o melodie deja memorată:
 
-1. **Apare bara?** Pe o melodie cu strofă și refren clare ar trebui să vezi segmente alternând.
-2. **Click pe un segment** te duce acolo în melodie?
-3. **Tiparele din legendă** sunt cele pe care le cânți? Aici e proba cea mai bună: tu știi
-   melodia, deci vezi imediat dacă „Strofă: G D Am C" e adevărat.
-4. **Indicatorul** se potrivește cu ce auzi? Când intri în refren, scrie „Refren"?
-5. Pe **melodia ta de la Fink** — care e aproape o singură buclă tot cântecul — te aștepți la
-   **o singură secțiune, fără nume**, cu ×mai multe. Ăsta e răspunsul corect, nu un bug:
-   melodia chiar e așa.
-
----
-
-## Ce să nu te sperie
-
-- Pe melodii fără structură clară (jazz, improvizație, un acord ținut), **bara nu apare deloc**.
-  E intenționat: mai bine nimic decât o structură inventată.
-- Dacă oprești analiza pe la jumătatea melodiei, structura acoperă doar ce s-a analizat.
-- Pe înregistrări live, cu tempo elastic, repetițiile se potrivesc mai slab.
+1. **Foaia** — vezi cântecul întreg? Rândurile corespund cu ce auzi?
+2. **Click pe un acord din foaie** — sare unde trebuie?
+3. **Acordul aprins** se mișcă odată cu melodia, pe rândul corect?
+4. **Proba de pauză**: pornește analiza, pune pauză 60 de secunde, reia. Acordurile trebuie să
+   continue să apară.
+5. **Proba de refresh**: în timpul analizei dă F5. După reîncărcare, apasă iconița — trebuie să
+   pornească o analiză nouă, curat.
+6. **Pagina principală YouTube** — panoul nu mai are voie să apară acolo.
 
 ---
 
 ## Starea proiectului
 
-| | Ce face | Cum e verificat |
-|---|---|---|
-| 0–3 | Detecția acordurilor + netezirea | 97% acuratețe pe semnal ostil |
-| 4–7 | Panou, memorie, capo, diagrame | Chromium real |
-| 8–9 | Loguri, arhivă | consolă curată; arhiva dezarhivată și încărcată automat |
-| **nou** | **Structura melodiei** | 10 grupuri de teste pe algoritm + 11 verificări de interfață |
+`npm test` = 30 de verificări doar în interfață, plus testele de algoritm.
+`npm run test:package` verifică arhiva, inclusiv separatoarele din zip.
+Arhiva v0.3.0: 23 de fișiere, 52 KB.
 
-`npm test` rulează tot (25 de verificări doar în interfață). `npm run test:package` verifică arhiva.
+## Ce a rămas dinadins nereparat
 
----
-
-## Ce urmează
-
-**Adversarialul pe toată extensia**, pe Fable — asta ai cerut. E momentul potrivit: extensia e
-completă funcțional, deci merită o privire rea, care caută ce s-a stricat pe drum.
-
----
-
-## Unde te uiți dacă ceva crapă
-
-Pornește **Debug logging** din pagina de opțiuni. Mesajele încep cu `[ChordTab:...]`.
-Structura loghează la intrarea în modul memorat: câte secțiuni, câte tipare, ce acoperire.
+Backlogul e scris la finalul [planului de reparații](docs/PLAN-reparatii-audit.md): în timpul
+unei reclame panoul afișează acordul greșit (se corectează singur la final), memoria de acorduri
+crește nelimitat, iar mixurile cu peste 10 bucle distincte confundă literele. Toate sunt
+marginale — le luăm când și dacă devin supărătoare.

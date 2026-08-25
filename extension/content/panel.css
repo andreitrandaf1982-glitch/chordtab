@@ -211,38 +211,79 @@
   outline-color: var(--ct-paper);
 }
 
-.ct-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* --- foaia melodiei: un rând per secțiune, în ordinea cântecului --- */
+
+.ct-sheet-wrap {
+  padding: 12px 0 2px;
+  border-bottom: 1px solid rgba(244, 242, 236, 0.12);
 }
 
-.ct-legend-row {
+.ct-sheet-wrap[hidden] { display: none; }
+
+.ct-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  /* Melodiile lungi se derulează în interiorul foii — panoul nu are voie să crească la
+     nesfârșit peste pagina YouTube. */
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.ct-sheet-row {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  padding: 3px 6px;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  opacity: 0.72;
 }
 
-.ct-legend-tag {
-  min-width: 5.6em;
+.ct-sheet-row.is-current {
+  opacity: 1;
+  background: rgba(244, 242, 236, 0.06);
+  border-left-color: var(--ct-paper);
+}
+
+.ct-sheet-tag {
+  min-width: 6.2em;
+  text-align: left;
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
+  color: var(--ct-paper);
   padding: 2px 8px;
+  border: 0;
   border-radius: 6px;
   background: rgba(244, 242, 236, 0.12);
+  cursor: pointer;
 }
 
-.ct-legend-tag[data-group="0"] { background: var(--ct-g0); }
-.ct-legend-tag[data-group="1"] { background: var(--ct-g1); }
-.ct-legend-tag[data-group="2"] { background: var(--ct-g2); }
-.ct-legend-tag[data-group="3"] { background: var(--ct-g3); }
-.ct-legend-tag[data-group="4"] { background: var(--ct-g4); }
+.ct-sheet-tag[data-group="0"] { background: var(--ct-g0); }
+.ct-sheet-tag[data-group="1"] { background: var(--ct-g1); }
+.ct-sheet-tag[data-group="2"] { background: var(--ct-g2); }
+.ct-sheet-tag[data-group="3"] { background: var(--ct-g3); }
+.ct-sheet-tag[data-group="4"] { background: var(--ct-g4); }
 
-.ct-legend-chips { display: flex; gap: 5px; flex-wrap: wrap; }
-.ct-legend-chips .ct-chip { font-size: 14px; padding: 2px 8px; }
+.ct-sheet-chips { display: flex; gap: 5px; flex-wrap: wrap; }
 
-.ct-legend-count {
+.ct-sheet-chip {
+  font-size: 14px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.ct-sheet-chip.is-now {
+  background: var(--ct-blue);
+  border-color: var(--ct-blue-bright);
+  box-shadow: 0 0 0 1px var(--ct-blue-bright);
+}
+
+.ct-sheet-count {
   font-size: 12px;
   opacity: 0.55;
   margin-left: auto;

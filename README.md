@@ -4,7 +4,8 @@ Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browseru
 (zero servere, zero chei API, zero costuri) și afișează acordurile principale sincronizate
 cu redarea — cu diagrame la hover, sugestie de capo și transpoziție.
 
-**Stare:** Etapa 1 completă + structura melodiei (v0.2.0).
+**Stare:** v0.3.0 — Etapa 1, structura melodiei, foaia melodiei, plus reparațiile
+[auditului adversarial](docs/PLAN-reparatii-audit.md).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md) ·
 Ce e de verificat: [docs/VERIFICARE.md](docs/VERIFICARE.md)
 
@@ -20,8 +21,10 @@ F#m A E B, dar cu capo 2 cânți Em G D A. Bara albastră din diagramă e capoda
 ![Structura melodiei](docs/capturi/panou-structura.png)
 
 **Structura melodiei**, găsită singură din repetiții: bara arată unde e strofa și unde e
-refrenul (click pe un segment = sari acolo), iar legenda îți dă tiparul fiecărei secțiuni
-**o singură dată** — „Strofă: G D Am C, de 6 ori" — în loc de un șir nesfârșit de acorduri.
+refrenul. Sub ea, **foaia melodiei** — cântecul întreg, un rând per secțiune, în ordine.
+Click pe orice acord sau pe orice segment te duce exact acolo, iar acordul care sună acum e
+aprins, ca să știi mereu unde ești. Melodiile fără structură clară primesc tot o foaie, cu
+toate acordurile.
 
 ## Instalare
 
@@ -96,8 +99,10 @@ Totul e cod propriu, fără biblioteci externe și fără WebAssembly. Nimic nu 
 - **Acordurile sincronizate** cu melodia, sub video, cu ce urmează la vedere.
 - **Diagrama pe corzi** a acordului curent, mereu vizibilă; hover pe unul care urmează ți-o arată
   pe a lui.
-- **Structura melodiei**: strofă, refren, punte — găsite din repetiții, cu tiparul fiecăreia
-  afișat o singură dată și cu salt la click. Îți arată și în ce secțiune ești acum.
+- **Structura melodiei**: strofă, refren, punte — găsite din repetiții. Îți arată și în ce
+  secțiune ești acum.
+- **Foaia melodiei**: cântecul întreg, un rând per secțiune, cu acordurile pe care poți da
+  click ca să sari exact acolo. Acordul care sună acum e aprins.
 - **Capo**: îți spune pe ce poziție să-l pui ca să cânți forme deschise, și îți arată formele.
 - **Transpoziție** ±6 semitonuri, dacă vrei să cânți în altă tonalitate.
 - **Memorie per melodie**: a doua oară acordurile apar instant și perfect sincronizate.

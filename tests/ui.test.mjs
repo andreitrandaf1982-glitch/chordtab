@@ -122,7 +122,7 @@ try {
   });
 
   const currentChord = () => page.locator('#chordtab-panel .ct-current').textContent();
-  const upcoming = () => page.locator('#chordtab-panel .ct-chip').allTextContents();
+  const upcoming = () => page.locator('#chordtab-panel .ct-next-list .ct-chip').allTextContents();
   // Așteptăm ca media să fie încărcată, altfel currentTime nu se poate poziționa.
   await page.waitForFunction(() => {
     const v = document.querySelector('video');
@@ -208,7 +208,7 @@ try {
 
   await check('Pasul 7: hover pe un acord care urmează îi arată diagrama, apoi revine', async () => {
     await seek(1);
-    await page.hover('#chordtab-panel .ct-chip >> nth=1'); // Am
+    await page.hover('#chordtab-panel .ct-next-list .ct-chip >> nth=1'); // Am
     await page.waitForFunction(
       () => document.querySelector('#chordtab-panel .ct-d-name')?.textContent?.trim() === 'Am',
       null, { timeout: 5000 });
@@ -235,7 +235,7 @@ try {
       window.__obs = new MutationObserver((recs) => { window.__mutations += recs.length; });
       window.__obs.observe(slot, { childList: true, subtree: true, attributes: true });
     });
-    await page.hover('#chordtab-panel .ct-chip >> nth=0');
+    await page.hover('#chordtab-panel .ct-next-list .ct-chip >> nth=0');
     await page.waitForTimeout(1500); // stăm pe loc: nimic nu trebuie să se mai schimbe
     const mutations = await page.evaluate(() => { window.__obs.disconnect(); return window.__mutations; });
     // O singură schimbare (înlocuirea diagramei) e normală. Zeci înseamnă buclă.
@@ -344,7 +344,7 @@ try {
   }
 
   const segments = () => page.locator('#chordtab-panel .ct-seg');
-  const legendRows = () => page.locator('#chordtab-panel .ct-legend-row');
+  const sheetRows = () => page.locator('#chordtab-panel .ct-sheet-row');
 
   await check('Pasul 1: bara are un segment per secțiune, cu literele grupurilor', async () => {
     const count = await segments().count();
@@ -354,24 +354,47 @@ try {
       `literele barei: ${JSON.stringify(letters)}`);
   });
 
-  await check('Pasul 1: legenda arată fiecare tipar O SINGURĂ dată, cu ×repetiții', async () => {
-    assert.equal(await legendRows().count(), 2, 'aștept două grupuri: A și B');
-    const rowA = legendRows().nth(0);
-    assert.deepEqual(await rowA.locator('.ct-chip').allTextContents(), ['G', 'D', 'Am', 'C'],
-      'tiparul lui A');
-    const rowB = legendRows().nth(1);
-    assert.deepEqual(await rowB.locator('.ct-chip').allTextContents(), ['Em', 'C', 'G', 'D'],
-      'tiparul lui B');
-    assert.match(await rowA.locator('.ct-legend-count').textContent(), /^×\d+$/);
-    // Strofa are 6 treceri prin buclă (4 + 2), refrenul 4 (2 + 2).
-    assert.equal((await rowA.locator('.ct-legend-count').textContent()).trim(), '×6');
-    assert.equal((await rowB.locator('.ct-legend-count').textContent()).trim(), '×4');
+  await check('Pasul 6: foaia are un rând per secțiune, ÎN ORDINEA melodiei', async () => {
+    // Cronologia e A A A A B B A A B B → patru secțiuni, în ordine (nu dedublate ca o legendă).
+    assert.equal(await sheetRows().count(), 4, 'aștept patru rânduri: A B A B');
+    const tags = await page.locator('#chordtab-panel .ct-sheet-tag').allTextContents();
+    assert.match(tags[0], /Strofă/, `rândul 1: „${tags[0]}”`);
+    assert.match(tags[1], /Refren/, `rândul 2: „${tags[1]}”`);
+    assert.match(tags[2], /Strofă/, `rândul 3: „${tags[2]}”`);
+    assert.match(tags[3], /Refren/, `rândul 4: „${tags[3]}”`);
   });
 
-  await check('Pasul 1: A și B sunt numite Strofă și Refren', async () => {
-    const tags = await page.locator('#chordtab-panel .ct-legend-tag').allTextContents();
-    assert.match(tags[0], /Strofă/, `prima etichetă: „${tags[0]}”`);
-    assert.match(tags[1], /Refren/, `a doua etichetă: „${tags[1]}”`);
+  await check('Pasul 6: fiecare rând arată tiparul lui, cu ×repetiții', async () => {
+    assert.deepEqual(await sheetRows().nth(0).locator('.ct-chip').allTextContents(),
+      ['G', 'D', 'Am', 'C'], 'tiparul primei strofe');
+    assert.deepEqual(await sheetRows().nth(1).locator('.ct-chip').allTextContents(),
+      ['Em', 'C', 'G', 'D'], 'tiparul primului refren');
+    // Prima strofă are 4 treceri prin buclă, primul refren 2.
+    assert.equal((await sheetRows().nth(0).locator('.ct-sheet-count').textContent()).trim(), '×4');
+    assert.equal((await sheetRows().nth(1).locator('.ct-sheet-count').textContent()).trim(), '×2');
+  });
+
+  await check('Pasul 6: click pe un acord din foaie sare la momentul lui', async () => {
+    await page.evaluate(() => { document.querySelector('video').currentTime = 0; });
+    await page.waitForTimeout(200);
+    // Al doilea acord din rândul 2 (refrenul începe la 32s, al doilea acord la +2s).
+    await sheetRows().nth(1).locator('.ct-sheet-chip').nth(1).click();
+    await page.waitForTimeout(300);
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    assert.ok(Math.abs(t - 34) <= 1.5, `după click sunt la ${t.toFixed(1)}s, aștept ~34s`);
+  });
+
+  await check('Pasul 6: rândul și acordul curent sunt evidențiate', async () => {
+    await seek(36); // în refren, la ~4s de la începutul lui (32s) => al treilea acord al buclei
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-sheet-row.is-current')?.dataset.index === '1',
+      null, { timeout: 5000 });
+    assert.equal(await page.locator('#chordtab-panel .ct-sheet-row.is-current').count(), 1,
+      'exact un rând trebuie evidențiat');
+    const now = page.locator('#chordtab-panel .ct-sheet-chip.is-now');
+    assert.equal(await now.count(), 1, 'exact un acord trebuie marcat ca „acum”');
+    assert.equal((await now.textContent()).trim(), 'G',
+      'la 36s, în bucla Em C G D pornită la 32s, sună al treilea acord');
   });
 
   await check('Pasul 1: click pe al doilea segment sare în melodie', async () => {
@@ -384,17 +407,17 @@ try {
     assert.ok(Math.abs(t - 32) <= 1.5, `după click sunt la ${t.toFixed(1)}s, aștept ~32s`);
   });
 
-  await check('Pasul 1: transpoziția schimbă și chip-urile din legendă', async () => {
+  await check('Pasul 6: transpoziția schimbă și acordurile din foaie', async () => {
     await page.click('#chordtab-panel .ct-tr-up');
     await page.waitForFunction(
-      () => document.querySelector('#chordtab-panel .ct-legend-row .ct-chip')?.textContent?.trim() === 'G#',
+      () => document.querySelector('#chordtab-panel .ct-sheet-row .ct-chip')?.textContent?.trim() === 'G#',
       null, { timeout: 5000 });
     assert.deepEqual(
-      await legendRows().nth(0).locator('.ct-chip').allTextContents(),
-      ['G#', 'D#', 'A#m', 'C#'], 'tiparul transpus cu un semiton');
+      await sheetRows().nth(0).locator('.ct-chip').allTextContents(),
+      ['G#', 'D#', 'A#m', 'C#'], 'foaia transpusă cu un semiton');
     await page.click('#chordtab-panel .ct-reset');
     await page.waitForFunction(
-      () => document.querySelector('#chordtab-panel .ct-legend-row .ct-chip')?.textContent?.trim() === 'G',
+      () => document.querySelector('#chordtab-panel .ct-sheet-row .ct-chip')?.textContent?.trim() === 'G',
       null, { timeout: 5000 });
   });
 
@@ -440,6 +463,19 @@ try {
     assert.ok(mut <= 2, `${mut} modificări în structură cu redarea oprită — se reconstruiește degeaba`);
   });
 
+  await check('Pasul 6: foaia nu pâlpâie când redarea stă pe loc', async () => {
+    await seek(10);
+    await page.evaluate(() => {
+      window.__sheetMut = 0;
+      const el = document.querySelector('#chordtab-panel .ct-sheet');
+      window.__sheetObs = new MutationObserver((r) => { window.__sheetMut += r.length; });
+      window.__sheetObs.observe(el, { childList: true, subtree: true, attributes: true });
+    });
+    await page.waitForTimeout(1500);
+    const mut = await page.evaluate(() => { window.__sheetObs.disconnect(); return window.__sheetMut; });
+    assert.ok(mut <= 2, `${mut} modificări în foaie cu redarea oprită — se rescrie degeaba`);
+  });
+
   await check('Fără repetiții nu se afișează nicio structură', async () => {
     const NOSTRUCT = 'noStructVideo';
     const chords = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A']
@@ -458,6 +494,29 @@ try {
       'bara nu trebuie să apară fără structură');
     assert.equal(await page.locator('#chordtab-panel .ct-section-now:visible').count(), 0,
       'nici indicatorul de secțiune');
+  });
+
+  await check('Pasul 6: fără structură, foaia TOT apare, cu toată melodia', async () => {
+    // Nevoia lui Andrei — „să văd melodia” — nu dispare când melodia n-are structură clară.
+    await page.locator('#chordtab-panel .ct-sheet-wrap').waitFor({ state: 'visible', timeout: 5000 });
+    assert.equal(await sheetRows().count(), 1, 'un singur rând, cu tot cântecul');
+    const chips = await sheetRows().nth(0).locator('.ct-sheet-chip').allTextContents();
+    assert.deepEqual(chips, ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A'],
+      `foaia plată: ${JSON.stringify(chips)}`);
+    // Și tot se poate naviga: al patrulea acord e la 15s.
+    await page.evaluate(() => { document.querySelector('video').currentTime = 0; });
+    await page.waitForTimeout(200);
+    await sheetRows().nth(0).locator('.ct-sheet-chip').nth(3).click();
+    await page.waitForTimeout(300);
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    assert.ok(Math.abs(t - 15) <= 1.5, `după click sunt la ${t.toFixed(1)}s, aștept ~15s`);
+  });
+
+  await check('Pasul 5: pe o pagină fără video, panoul nu apare deloc', async () => {
+    await page.goto('https://www.youtube.com/feed/subscriptions');
+    await page.waitForTimeout(1200); // timp berechet ca un panou greșit să fi apucat să apară
+    assert.equal(await page.locator('#chordtab-panel').count(), 0,
+      'panoul nu are ce căuta pe o pagină care nu e de video');
   });
 
   await check('Navigarea SPA resetează panoul', async () => {
