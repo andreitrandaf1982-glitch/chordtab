@@ -6,9 +6,16 @@
   <style>
     body { font-family: "Inter Tight", Arial, sans-serif; background: #f4f2ec; color: #0b0f10; padding: 24px; max-width: 480px; }
     h1 { color: #12635d; font-size: 20px; }
+    h2 { color: #12635d; font-size: 16px; margin: 8px 0; }
     label { display: flex; align-items: center; gap: 8px; margin: 16px 0; }
     button { background: #1f8f87; color: #f4f2ec; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
     #status { font-size: 13px; opacity: 0.7; margin-top: 12px; }
+    hr { border: 0; border-top: 1px solid #d8d5cc; margin: 24px 0; }
+    .hint { font-size: 13px; opacity: 0.75; }
+    #nano-run { margin-left: 8px; }
+    #nano-out { white-space: pre-wrap; background: #fff; border: 1px solid #d8d5cc; border-radius: 8px; padding: 12px; font-size: 12.5px; }
+    #nano-out:empty { display: none; }
   </style>
 </head>
 <body>
@@ -19,6 +26,15 @@
   </label>
   <button id="clear-cache">Golește cache-ul de acorduri</button>
   <div id="status"></div>
+
+  <hr>
+  <h2>Poarta 0 — Profesorul AI (test temporar)</h2>
+  <p class="hint">Verificăm dacă AI-ul încorporat în Chrome (Gemini Nano) merge pe acest
+  calculator, înainte să construim „Profesorul”. Dacă modelul nu e încă descărcat, butonul 2
+  îl descarcă o singură dată (~2–4 GB).</p>
+  <button id="nano-check">1. Verifică disponibilitatea</button>
+  <button id="nano-run" hidden>2. Testează româna</button>
+  <pre id="nano-out"></pre>
   <script type="module" src="options.js"></script>
 </body>
 </html>

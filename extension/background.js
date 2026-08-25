@@ -158,8 +158,30 @@ function notifyContent(msg) {
 
 // Releu: mesajele offscreen (CHORD_EVENT etc.) către content scriptul tabului capturat.
 // CT_TIME (content -> offscreen) NU trece pe aici: runtime.sendMessage ajunge direct la offscreen.
-chrome.runtime.onMessage.addListener((msg, sender) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.target === 'background') {
+    // Poarta 0 (temporar): pagina de opțiuni întreabă dacă Gemini Nano există AICI, în
+    // service worker — contextul în care ar rula „Profesorul AI” în producție.
+    if (msg.type === 'NANO_PROBE') {
+      (async () => {
+        let found = null;
+        let availability = null;
+        try {
+          if (typeof LanguageModel !== 'undefined') {
+            found = 'LanguageModel (stabil)';
+            availability = await LanguageModel.availability();
+          } else if (globalThis.ai?.languageModel) {
+            found = 'ai.languageModel (variantă veche)';
+            const c = await globalThis.ai.languageModel.capabilities?.();
+            availability = c?.available ?? null;
+          }
+        } catch (err) {
+          availability = `eroare: ${err?.message || err}`;
+        }
+        sendResponse({ found, availability });
+      })();
+      return true; // sendResponse vine asincron
+    }
     if (msg.type === 'OFFSCREEN_READY') {
       log.debug('Documentul offscreen a semnalat că e pregătit.');
       offscreenReady?.();
