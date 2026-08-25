@@ -510,6 +510,92 @@ try {
       null, { timeout: 5000 });
   });
 
+  // --- PASUL 4: modul de exersare (secțiune pe repetat + viteză) ---
+
+  await check('Pasul 4: fiecare secțiune are butonul ⟳ de exersare', async () => {
+    assert.equal(await page.locator('#chordtab-panel .ct-sheet-row .ct-loop').count(), 4,
+      'câte un ⟳ pe fiecare rând de secțiune');
+    assert.equal(await page.locator('#chordtab-panel .ct-practice:visible').count(), 0,
+      'bara de exersare apare abia când exersezi');
+  });
+
+  await check('Pasul 4: ⟳ pune secțiunea pe repetat și sare la începutul ei', async () => {
+    await page.evaluate(() => { document.querySelector('video').currentTime = 5; });
+    await page.waitForTimeout(200);
+    await sheetRows().nth(1).locator('.ct-loop').click(); // refrenul, 32-48s
+    await page.locator('#chordtab-panel .ct-practice').waitFor({ state: 'visible', timeout: 5000 });
+    const what = await page.locator('#chordtab-panel .ct-practice-what').textContent();
+    assert.match(what, /Exersezi:\s*Refren/, `bara de exersare spune „${what}”`);
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    assert.ok(Math.abs(t - 32) <= 1.5, `⟳ trebuie să sară la începutul secțiunii, sunt la ${t.toFixed(1)}s`);
+    assert.equal(await sheetRows().nth(1).locator('.ct-loop.is-active').count(), 1,
+      'butonul secțiunii exersate rămâne apăsat');
+  });
+
+  await check('Pasul 4: bucla se întoarce singură la începutul secțiunii', async () => {
+    // Melodia trebuie să RULEZE: bucla se declanșează când timpul ajunge la finalul
+    // secțiunii (48s), nu la o poziționare manuală undeva aproape de el.
+    await page.evaluate(async () => {
+      const v = document.querySelector('video');
+      v.currentTime = 47.4;
+      v.muted = true;
+      try { await v.play(); } catch { /* verificarea de mai jos spune dacă n-a pornit */ }
+    });
+    await page.waitForFunction(
+      () => document.querySelector('video').currentTime < 34,
+      null, { timeout: 8000 });
+    const t = await page.evaluate(() => {
+      const v = document.querySelector('video');
+      v.pause();
+      return v.currentTime;
+    });
+    assert.ok(t >= 31.9, `bucla a sărit prea departe înapoi: ${t.toFixed(1)}s`);
+  });
+
+  await check('Pasul 4: viteza se schimbă fără să schimbe tonalitatea', async () => {
+    await page.click('#chordtab-panel .ct-speed[data-rate="0.75"]');
+    await page.waitForTimeout(200);
+    const v = await page.evaluate(() => {
+      const el = document.querySelector('video');
+      return { rate: el.playbackRate, pitch: el.preservesPitch };
+    });
+    assert.equal(v.rate, 0.75, 'viteza trebuie aplicată videoului');
+    assert.equal(v.pitch, true, 'fără preservesPitch melodia ar coborî în tonalitate');
+    assert.equal(await page.locator('#chordtab-panel .ct-speed.is-active').count(), 1,
+      'exact o viteză marcată ca activă');
+  });
+
+  await check('Pasul 4: la ieșire se revine la viteza dinainte, nu orbește la 1', async () => {
+    await page.click('#chordtab-panel .ct-practice-stop');
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('#chordtab-panel .ct-practice:visible').count(), 0,
+      'bara de exersare trebuie să dispară');
+    // Intrăm din nou, dar de data asta cu o viteză „a omului” diferită de 1.
+    await page.evaluate(() => { document.querySelector('video').playbackRate = 1.25; });
+    await sheetRows().nth(1).locator('.ct-loop').click();
+    await page.waitForTimeout(200);
+    await page.click('#chordtab-panel .ct-speed[data-rate="0.5"]');
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => document.querySelector('video').playbackRate), 0.5);
+    await page.click('#chordtab-panel .ct-practice-stop');
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => document.querySelector('video').playbackRate), 1.25,
+      'la ieșire trebuie restaurată viteza pe care o avea omul înainte');
+    await page.evaluate(() => { document.querySelector('video').playbackRate = 1; });
+  });
+
+  await check('Pasul 4: dacă sari în altă parte a melodiei, exersarea se oprește', async () => {
+    await sheetRows().nth(1).locator('.ct-loop').click(); // refren, 32-48s
+    await page.locator('#chordtab-panel .ct-practice').waitFor({ state: 'visible', timeout: 5000 });
+    // Click pe prima strofă: ai plecat intenționat, nu te tragem înapoi în refren.
+    await sheetRows().nth(0).locator('.ct-sheet-tag').click();
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-practice')?.hidden === true,
+      null, { timeout: 5000 });
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    assert.ok(t < 10, `trebuie să rămânem în strofă, suntem la ${t.toFixed(1)}s`);
+  });
+
   await check('Pasul 2: indicatorul arată secțiunea în care ești', async () => {
     await seek(10);   // în interiorul primei strofe
     await page.waitForFunction(

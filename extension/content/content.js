@@ -31,6 +31,9 @@ const STRIP_MIN_PX_PER_SEC = 14;
 const STRIP_MAX_PX_PER_SEC = 80;
 const STRIP_GAP_PX = 6;     // spațiul dintre cartonașe
 
+const PRACTICE_RATES = [0.5, 0.75, 1];
+const PRACTICE_MIN_SECONDS = 1; // sub atât n-are sens să pui ceva pe repetat
+
 const state = {
   videoId: null,
   mode: 'idle',       // 'idle' | 'listening' | 'playback'
@@ -42,6 +45,8 @@ const state = {
   structure: null,    // rezultatul lui detectSections — doar în modul „memorat”
   clusterOrder: new Map(), // literă de grup -> „a câta bucată distinctă” e (pentru „Partea N”)
   stripPx: 40,        // scara benzii rulante, în pixeli pe secundă
+  practice: null,     // { index, start, end, label, prevRate } — secțiunea pusă pe repetat
+  practiceRate: 1,    // viteza aleasă pentru exersare (ține între secțiuni)
   timeInterval: null,
   saveTimer: null,
   rafId: null,
@@ -84,6 +89,7 @@ function onNavigate() {
   const newId = getVideoId();
   if (newId === state.videoId) return;
   log.info('Navigare SPA: video nou', newId);
+  stopPractice(true); // altfel viteza aleasă pentru exersare rămâne pe melodia următoare
   stopClock();
   stopPlayback();
   Object.assign(state, {
@@ -232,6 +238,12 @@ function buildPanel() {
     </div>
     <div class="ct-sheet-wrap" hidden>
       <span class="ct-group-label">${STR.sheet}</span>
+      <div class="ct-practice" hidden>
+        <span class="ct-practice-what"></span>
+        <span class="ct-group-label">${STR.speed}</span>
+        <span class="ct-practice-speeds"></span>
+        <button class="ct-btn ct-practice-stop" type="button">${STR.practiceStop}</button>
+      </div>
       <div class="ct-sheet"></div>
     </div>
     <div class="ct-controls">
@@ -267,6 +279,9 @@ function buildPanel() {
     strip: panel.querySelector('.ct-strip'),
     sheetWrap: panel.querySelector('.ct-sheet-wrap'),
     sheet: panel.querySelector('.ct-sheet'),
+    practice: panel.querySelector('.ct-practice'),
+    practiceWhat: panel.querySelector('.ct-practice-what'),
+    practiceSpeeds: panel.querySelector('.ct-practice-speeds'),
     sectionNow: panel.querySelector('.ct-section-now'),
   });
 
@@ -276,7 +291,9 @@ function buildPanel() {
   panel.querySelector('.ct-tr-down').addEventListener('click', () => nudgeTranspose(-1));
   panel.querySelector('.ct-tr-up').addEventListener('click', () => nudgeTranspose(1));
   panel.querySelector('.ct-reset').addEventListener('click', resetControls);
+  panel.querySelector('.ct-practice-stop').addEventListener('click', () => stopPractice());
   buildCapoButtons();
+  buildSpeedButtons();
 
   // Îl atașăm imediat (overlay) ca să fie vizibil din prima, apoi îl mutăm sub video
   // când #below apare. Dacă nu apare deloc, rămâne overlay — comportamentul de rezervă.
@@ -331,6 +348,7 @@ function render() {
   buildStrip();
   buildStructure();
   buildSheet();
+  renderPractice();
   if (mode === 'playback') {
     const video = getVideo();
     const t = video ? video.currentTime : 0;
@@ -399,6 +417,95 @@ function resetControls() {
   state.transpose = 0;
   state.capo = 0; // înapoi la acordurile care se aud cu adevărat
   render();
+}
+
+// --- Modul de exersare --------------------------------------------------------
+//
+// O secțiune pusă pe repetat, la viteza pe care o vrei. Asta e ce lipsea ca extensia să
+// treacă de la „îmi arată acorduri” la „mă ajută să învăț melodia”: alegi refrenul, îl
+// încetinești, îl cânți de zece ori. Există DOAR în modul memorat — în timpul analizei
+// bucla ar re-analiza la nesfârșit aceleași secunde.
+
+function buildSpeedButtons() {
+  ui.practiceSpeeds.innerHTML = '';
+  for (const rate of PRACTICE_RATES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ct-btn ct-speed';
+    b.dataset.rate = String(rate);
+    b.textContent = STR.speedValue(rate);
+    b.addEventListener('click', () => {
+      state.practiceRate = rate;
+      applyRate(rate);
+      renderPractice();
+    });
+    ui.practiceSpeeds.appendChild(b);
+  }
+}
+
+/** Schimbă viteza PĂSTRÂND tonalitatea — altfel acordurile afișate n-ar mai fi ce auzi. */
+function applyRate(rate) {
+  const video = getVideo();
+  if (!video) return;
+  video.preservesPitch = true;
+  if ('webkitPreservesPitch' in video) video.webkitPreservesPitch = true;
+  if ('mozPreservesPitch' in video) video.mozPreservesPitch = true;
+  video.playbackRate = rate;
+}
+
+function startPractice(index, range) {
+  const video = getVideo();
+  if (!video || range.end - range.start <= PRACTICE_MIN_SECONDS) return;
+  // Viteza „dinainte” se reține O SINGURĂ DATĂ, la intrarea în exersare: dacă schimbi
+  // secțiunea în timp ce exersezi încetinit, „dinainte” tot viteza ta inițială e, nu 0,75.
+  const prevRate = state.practice ? state.practice.prevRate : video.playbackRate;
+  state.practice = { index, start: range.start, end: range.end, label: range.label, prevRate };
+  applyRate(state.practiceRate);
+  seekTo(range.start);
+  render();
+}
+
+function stopPractice(silent = false) {
+  if (!state.practice) return;
+  const { prevRate } = state.practice;
+  state.practice = null;
+  // Înapoi la viteza pe care o avea OMUL, nu orbește 1: putea să aibă deja YouTube-ul pe 1,25.
+  applyRate(prevRate);
+  if (!silent) render();
+}
+
+/** Bucla propriu-zisă, din tick-ul de redare. */
+function tickPractice(t) {
+  const p = state.practice;
+  const video = getVideo();
+  if (!video) return;
+  const end = Math.min(p.end, Number.isFinite(video.duration) && video.duration > 0
+    ? video.duration : p.end);
+  if (end - p.start <= 0.5) { stopPractice(); return; }
+  // Ai sărit în altă parte a melodiei (click în foaie, pe bandă, pe bara YouTube): exersarea
+  // s-a terminat. Nu te tragem înapoi într-o secțiune pe care ai părăsit-o intenționat.
+  if (t < p.start - 1 || t > end + 1) { stopPractice(); return; }
+  if (t >= end - 0.05) video.currentTime = p.start + 0.02;
+}
+
+/** Doar text și clase — bara de exersare nu se reconstruiește niciodată. */
+function renderPractice() {
+  if (!ui.practice) return;
+  const p = state.mode === 'playback' ? state.practice : null;
+  ui.practice.hidden = !p;
+  if (p) {
+    ui.practiceWhat.textContent = STR.practiceOn(p.label);
+    for (const b of ui.practiceSpeeds.children) {
+      b.classList.toggle('is-active', Number(b.dataset.rate) === state.practiceRate);
+    }
+  }
+  // Butonul ⟳ al secțiunii care se exersează rămâne apăsat, ca să se vadă unde ești.
+  if (ui.sheet) {
+    for (const row of ui.sheet.children) {
+      row.querySelector('.ct-loop')
+        ?.classList.toggle('is-active', !!p && Number(row.dataset.index) === p.index);
+    }
+  }
 }
 
 // --- Banda rulantă ------------------------------------------------------------
@@ -660,7 +767,7 @@ function makeSheetChip(label, at) {
   return chip;
 }
 
-function sheetRow({ tag, group, chips, reps, index }) {
+function sheetRow({ tag, group, chips, reps, index, range }) {
   const row = document.createElement('div');
   row.className = 'ct-sheet-row';
   row.dataset.index = String(index);
@@ -674,6 +781,23 @@ function sheetRow({ tag, group, chips, reps, index }) {
     label.title = STR.jumpTo(tag.text);
     label.addEventListener('click', () => seekTo(tag.start));
     row.appendChild(label);
+  }
+
+  // ⟳ — pune secțiunea pe repetat. Doar pe rândurile care CHIAR sunt o secțiune: pe foaia
+  // plată (melodie fără structură) rândul e tot cântecul, iar „repetă tot cântecul” nu e
+  // exersare, e redare normală.
+  if (range) {
+    const loop = document.createElement('button');
+    loop.type = 'button';
+    loop.className = 'ct-loop';
+    loop.textContent = '⟳';
+    loop.title = STR.practiceHelp(range.label);
+    loop.setAttribute('aria-label', STR.practiceHelp(range.label));
+    loop.addEventListener('click', () => {
+      if (state.practice?.index === index) stopPractice();
+      else startPractice(index, range);
+    });
+    row.appendChild(loop);
   }
 
   const list = document.createElement('span');
@@ -738,6 +862,7 @@ function buildSheet() {
       chips,
       reps: s.reps,
       index: i,
+      range: { start: s.start, end: s.end, label: sectionLabel(s) },
     }));
   });
 }
@@ -916,6 +1041,9 @@ function onMessage(msg) {
 }
 
 function startClock() {
+  // O buclă de exersare ar re-analiza la nesfârșit aceleași secunde, iar viteza schimbată
+  // strică detecția. Analiza cere melodia întreagă, la viteza ei.
+  stopPractice(true);
   stopPlayback();
   state.mode = 'listening';
   state.chords = [];
@@ -982,6 +1110,7 @@ function startPlayback() {
       // Singura scriere care CHIAR se face la fiecare cadru: transformul benzii. E o
       // proprietate compozitată, deci nu declanșează recalcul de layout.
       updateStrip(t);
+      if (state.practice) tickPractice(t);
     }
     state.rafId = requestAnimationFrame(tick);
   };

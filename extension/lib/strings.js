@@ -39,6 +39,14 @@ export const STR = {
   sectionLabel: (ordinal, name) => name || `Partea ${ordinal}`,
   freeSection: (name) => name || 'Trecere',
   jumpTo: (label) => `Sari la ${label}`,
+
+  // exersare: o secțiune pusă pe repetat, cât vrei, la ce viteză vrei
+  practiceOn: (label) => `Exersezi: ${label}`,
+  practiceHelp: (label) => `Pune „${label}” pe repetat, ca să exersezi`,
+  practiceStop: 'Gata',
+  speed: 'viteză',
+  // Virgulă zecimală, că așa se scrie în română.
+  speedValue: (r) => `${String(r).replace('.', ',')}×`,
   times: (n) => `×${n}`,
   upNextSection: (label) => `urmează: ${label}`,
 

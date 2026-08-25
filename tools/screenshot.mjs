@@ -95,6 +95,14 @@ try {
 
   const panel = page.locator('#chordtab-panel');
   await panel.waitFor({ state: 'attached', timeout: 15000 });
+
+  // Cursorul rămâne acolo unde a fost ultimul click. Dacă asta se nimerește să fie un acord,
+  // diagrama arată acordul de sub cursor (comportament corect la hover) și captura pare a
+  // spune că panoul se contrazice. Îl mutăm în afara panoului înainte de fiecare poză.
+  const neutralMouse = async () => {
+    await page.mouse.move(2, 2);
+    await page.waitForTimeout(250);
+  };
   await page.waitForFunction(() => {
     const p = document.getElementById('chordtab-panel');
     return p?.parentElement?.id === 'below';
@@ -106,6 +114,7 @@ try {
 
   await page.evaluate(() => { document.querySelector('video').currentTime = 7; });
   await page.waitForTimeout(600);
+  await neutralMouse();
   await panel.screenshot({ path: join(OUT, 'panou.png') });
   console.log('  docs/capturi/panou.png');
 
@@ -123,6 +132,7 @@ try {
   await page.evaluate(() => { document.querySelector('video').currentTime = 1; });
   await page.click('#chordtab-panel .ct-capo.is-suggested');
   await page.waitForTimeout(600);
+  await neutralMouse();
   await panel.screenshot({ path: join(OUT, 'panou-capo.png') });
   console.log('  docs/capturi/panou-capo.png');
 
@@ -136,8 +146,19 @@ try {
   await page.locator('#chordtab-panel .ct-sheet-wrap').waitFor({ state: 'visible', timeout: 10000 });
   await page.evaluate(() => { document.querySelector('video').currentTime = 36; }); // în refren
   await page.waitForTimeout(800);
+  await neutralMouse();
   await panel.screenshot({ path: join(OUT, 'panou-structura.png') });
   console.log('  docs/capturi/panou-structura.png');
+
+  // A patra captură: modul de exersare — refrenul pe repetat, încetinit.
+  await page.locator('#chordtab-panel .ct-sheet-row').nth(1).locator('.ct-loop').click();
+  await page.locator('#chordtab-panel .ct-practice').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('#chordtab-panel .ct-speed[data-rate="0.75"]');
+  await page.evaluate(() => { document.querySelector('video').currentTime = 38; });
+  await page.waitForTimeout(800);
+  await neutralMouse();
+  await panel.screenshot({ path: join(OUT, 'panou-exersare.png') });
+  console.log('  docs/capturi/panou-exersare.png');
 } finally {
   await ctx?.close().catch(() => {});
   rmSync(profile, { recursive: true, force: true });

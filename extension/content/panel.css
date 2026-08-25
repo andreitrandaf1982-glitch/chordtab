@@ -390,6 +390,52 @@
   margin-left: auto;
 }
 
+/* --- exersare: o secțiune pe repetat, la viteza ta --- */
+
+.ct-loop {
+  border: 1px solid rgba(244, 242, 236, 0.22);
+  background: transparent;
+  color: var(--ct-paper);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 7px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.ct-loop:hover { border-color: var(--ct-blue); opacity: 1; }
+
+.ct-loop.is-active {
+  background: var(--ct-blue);
+  border-color: var(--ct-blue);
+  opacity: 1;
+}
+
+.ct-practice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(48, 88, 240, 0.16);
+  border: 1px solid var(--ct-blue-dark);
+}
+
+.ct-practice[hidden] { display: none; }
+
+.ct-practice-what {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ct-practice-speeds { display: flex; gap: 3px; }
+
+.ct-practice-stop { margin-left: auto; }
+
 /* Secțiunea curentă, lângă acord */
 .ct-section-now {
   align-self: flex-start;
