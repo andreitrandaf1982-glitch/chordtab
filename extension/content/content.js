@@ -945,10 +945,13 @@ function buildSheet() {
     let chips;
     if (s.cluster && st.patterns[s.cluster]) {
       // Secțiune cu buclă: arătăm tiparul-consens, iar clickul duce la locul acordului în
-      // PRIMA trecere prin buclă.
+      // PRIMA trecere prin buclă. `lead` = secundele mutate din coada buclei în capul ei la
+      // contopirea circulară: fără scăderea lui, toate chip-urile de după primul erau
+      // decalate cu atât, deci clickul sărea unde suna alt acord.
+      const { loop, lead = 0 } = st.patterns[s.cluster];
       let offset = 0;
-      chips = st.patterns[s.cluster].loop.map((item) => {
-        const chip = makeSheetChip(item.label, s.start + offset);
+      chips = loop.map((item, k) => {
+        const chip = makeSheetChip(item.label, k === 0 ? s.start : s.start + Math.max(0, offset - lead));
         offset += item.seconds;
         return chip;
       });
@@ -971,9 +974,11 @@ function buildSheet() {
 function sheetChipIndexAt(section, t) {
   const st = state.structure;
   if (section && section.cluster && st?.patterns[section.cluster]) {
-    const { loop, period } = st.patterns[section.cluster];
+    const { loop, period, lead = 0 } = st.patterns[section.cluster];
     if (!(period > 0)) return -1;
-    let phase = (t - section.start) % period;
+    // + lead, fiindcă lista comprimată începe cu `lead` secunde ÎNAINTE de faza 0 (capetele
+    // buclei au fost contopite). Fără asta, foaia aprindea alt acord decât cel care sună.
+    let phase = (t - section.start + lead) % period;
     if (phase < 0) phase += period;
     let acc = 0;
     for (let i = 0; i < loop.length; i++) {

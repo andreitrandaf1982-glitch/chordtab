@@ -157,7 +157,8 @@ export function detectSections(chords, duration, opts = {}) {
   const patterns = {};
   for (const c of clusters) {
     if (c.letter === null) continue;
-    patterns[c.letter] = { loop: compressLoop(c.loopSeq, dt), period: c.period * dt };
+    const { loop, lead } = compressLoop(c.loopSeq, dt);
+    patterns[c.letter] = { loop, period: c.period * dt, lead };
   }
 
   let covered = 0;
@@ -528,6 +529,12 @@ function tiledSimilarity(seq, s, e, loopSeq) {
 }
 
 // Buclă cuantizată -> listă de afișat: [{label, seconds}], cu capetele circulare unite.
+//
+// ATENȚIE, cine consumă rezultatul: la contopirea capetelor, secundele de la COADĂ se mută
+// în capul listei, deci primul element începe de fapt cu `lead` secunde ÎNAINTE de faza 0 a
+// buclei. Fără compensarea asta, foaia melodiei ieșea rotită: click pe al doilea acord sărea
+// unde suna primul, iar evidențierea contrazicea acordul mare afișat deasupra. Cazul e
+// obișnuit, nu exotic — orice progresie care pleacă și revine pe tonică (E-A-E-B-A-E).
 function compressLoop(loopSeq, dt) {
   const out = [];
   for (const label of loopSeq) {
@@ -535,11 +542,13 @@ function compressLoop(loopSeq, dt) {
     if (last && last.label === label) last.seconds += dt;
     else out.push({ label, seconds: dt });
   }
+  let lead = 0;
   if (out.length > 1 && out[0].label === out[out.length - 1].label) {
-    out[0].seconds += out[out.length - 1].seconds;
+    lead = out[out.length - 1].seconds;
+    out[0].seconds += lead;
     out.pop();
   }
-  return out;
+  return { loop: out, lead };
 }
 
 // Numire prudentă: mai bine o literă decât un nume greșit.

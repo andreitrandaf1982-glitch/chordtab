@@ -29,6 +29,44 @@ const letterSeq = (r) => r.sections.map((s) => s.cluster);
 const nameSeq = (r) => r.sections.map((s) => s.name);
 const loopLabels = (r, c) => r.patterns[c].loop.map((x) => x.label);
 
+// --- 0. Contopirea circulară: bucla care începe ȘI se termină pe același acord ----
+// Cazul obișnuit, nu exotic: orice progresie care pleacă și revine pe tonică. compressLoop
+// unește capetele și mută secundele cozii în capul listei — deci primul element începe cu
+// `lead` secunde ÎNAINTE de faza 0. Cine consumă lista trebuie să compenseze; fără asta,
+// foaia melodiei ieșea rotită (click pe al doilea acord sărea unde suna primul).
+{
+  // E-A-E-B-A-E: 4+2+2+2+2+2 = 14 s, prima și ultima bucată sunt E.
+  const LOOP_E = [['E', 4], ['A', 2], ['E', 2], ['B', 2], ['A', 2], ['E', 2]];
+  const { events, duration } = timeline(rep(LOOP_E, 6));
+  const r = detectSections(events, duration);
+  const c = Object.keys(r.patterns)[0];
+  assert.ok(c, 'trebuie găsit un tipar');
+
+  const p = r.patterns[c];
+  assert.equal(p.loop[0].label, 'E', 'bucla începe pe E');
+  assert.ok(p.loop[p.loop.length - 1].label !== 'E',
+    `după contopire, coada nu mai are voie să fie tot E: ${JSON.stringify(p.loop.map((x) => x.label))}`);
+  // Coada contopită era de 2 s: exact atât trebuie raportat ca `lead`.
+  assert.ok(Math.abs(p.lead - 2) <= 0.6, `lead ${p.lead}, aștept ~2`);
+  assert.ok(Math.abs(p.loop[0].seconds - 6) <= 0.9,
+    `capul contopit ține ${p.loop[0].seconds}s (4 de la început + 2 din coadă), aștept ~6`);
+
+  // Verificarea care contează: reconstruind momentele așa cum o face foaia (primul chip la
+  // start, restul la acc - lead), fiecare chip trebuie să cadă pe acordul care chiar sună.
+  const sec = r.sections[0];
+  let acc = 0;
+  p.loop.forEach((item, k) => {
+    const at = k === 0 ? sec.start : sec.start + Math.max(0, acc - p.lead);
+    acc += item.seconds;
+    // Ce sună la momentul `at`, după cronologia originală?
+    let sounding = null;
+    for (const e of events) { if (e.t <= at + 0.01) sounding = e.label; else break; }
+    assert.equal(sounding, item.label,
+      `chip-ul ${k} („${item.label}") duce la ${at.toFixed(1)}s, unde sună „${sounding}"`);
+  });
+  console.log('  Buclă contopită circular: lead raportat, chip-urile cad pe acordul corect ✔');
+}
+
 // --- 1. Structura clasică: A A A A B B A A B B punte B B --------------------------
 // Capcana pe care o testăm explicit: A și B au ACEEAȘI perioadă (8 s) — segmentarea doar
 // după perioadă le-ar lipi; tăietura pe conținut trebuie să le despartă.
