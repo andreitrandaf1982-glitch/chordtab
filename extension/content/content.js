@@ -19,10 +19,17 @@ const log = createLogger('content');
 
 const CACHE_VERSION = 1;
 const MAX_CAPO = 7;
-const UPCOMING_COUNT = 3;
 const RECENT_COUNT = 4;
 const MIN_COVERAGE = 0.5;   // sub atât, structura găsită e prea firavă ca s-o arătăm
 const ANNOUNCE_AHEAD = 3;   // cu câte secunde înainte anunțăm secțiunea următoare
+
+// Banda rulantă: cât de lat vrem, în medie, un acord. Din el iese scara (pixeli/secundă), NU
+// din lățimea panoului — așa se văd mereu ~6 acorduri, și pe melodii lente, și pe melodii dese,
+// și nu citim dimensiuni din pagină în bucla de redare (ar declanșa recalcul de layout la 60fps).
+const STRIP_TARGET_CHIP_PX = 92;
+const STRIP_MIN_PX_PER_SEC = 14;
+const STRIP_MAX_PX_PER_SEC = 80;
+const STRIP_GAP_PX = 6;     // spațiul dintre cartonașe
 
 const state = {
   videoId: null,
@@ -34,6 +41,7 @@ const state = {
   analyzedAt: null,
   structure: null,    // rezultatul lui detectSections — doar în modul „memorat”
   clusterOrder: new Map(), // literă de grup -> „a câta bucată distinctă” e (pentru „Partea N”)
+  stripPx: 40,        // scara benzii rulante, în pixeli pe secundă
   timeInterval: null,
   saveTimer: null,
   rafId: null,
@@ -185,6 +193,12 @@ function chordIndexAt(t) {
   return res;
 }
 
+/** Sare în melodie. 0,05 s peste momentul cerut, ca să cădem SIGUR în acordul / secțiunea lui. */
+function seekTo(t) {
+  const video = getVideo();
+  if (video) video.currentTime = Math.max(0, t) + 0.05;
+}
+
 function buildPanel() {
   document.getElementById('chordtab-panel')?.remove();
 
@@ -204,6 +218,12 @@ function buildPanel() {
       <div class="ct-next">
         <span class="ct-section-now" hidden></span>
         <span class="ct-next-label"></span><span class="ct-next-list"></span>
+      </div>
+    </div>
+    <div class="ct-strip-wrap" hidden>
+      <div class="ct-strip-view">
+        <div class="ct-strip"></div>
+        <div class="ct-strip-line"></div>
       </div>
     </div>
     <div class="ct-structure" hidden>
@@ -243,6 +263,8 @@ function buildPanel() {
     diagramSlot: panel.querySelector('.ct-diagram-slot'),
     structure: panel.querySelector('.ct-structure'),
     bar: panel.querySelector('.ct-bar'),
+    stripWrap: panel.querySelector('.ct-strip-wrap'),
+    strip: panel.querySelector('.ct-strip'),
     sheetWrap: panel.querySelector('.ct-sheet-wrap'),
     sheet: panel.querySelector('.ct-sheet'),
     sectionNow: panel.querySelector('.ct-section-now'),
@@ -306,6 +328,7 @@ function render() {
   if (mode === 'playback') renderPlayback();
   else renderLive();
 
+  buildStrip();
   buildStructure();
   buildSheet();
   if (mode === 'playback') {
@@ -314,6 +337,8 @@ function render() {
     updateCurrentSection(t);
     ui.sheetHighlight = null; // foaia s-a putut reconstrui: forțăm o evidențiere proaspătă
     updateSheetHighlight(t);
+    updateStripHighlight(chordIndexAt(t));
+    updateStrip(t);
   } else if (ui.sectionNow) {
     ui.sectionNow.hidden = true;
   }
@@ -323,8 +348,11 @@ function renderPlayback() {
   const video = getVideo();
   const idx = chordIndexAt(video ? video.currentTime : 0);
   setCurrent(idx >= 0 ? state.chords[idx].label : null);
-  ui.nextLabel.textContent = STR.upNext;
-  fillChordList(state.chords.slice(idx + 1, idx + 1 + UPCOMING_COUNT).map((c) => c.label));
+  // Ce urmează se vede pe BANDĂ, cu tot cu cât ține fiecare acord. Lista de trei chip-uri de
+  // aici era fix ce reclama Andrei: „văd mereu pe ecran doar patru acorduri”. Eticheta rămâne
+  // goală; o umple doar anunțul secțiunii următoare, din updateCurrentSection.
+  ui.nextLabel.textContent = '';
+  fillChordList([]);
 }
 
 function renderLive() {
@@ -371,6 +399,120 @@ function resetControls() {
   state.transpose = 0;
   state.capo = 0; // înapoi la acordurile care se aud cu adevărat
   render();
+}
+
+// --- Banda rulantă ------------------------------------------------------------
+//
+// Acordurile curg spre linia „acum”, ca la karaoke: le vezi venind, cu lățimea proporțională
+// cu cât ține fiecare, deci se citește și RITMUL, nu doar ordinea. Înlocuiește lista de trei
+// chip-uri „urmează” — exact reclamația lui Andrei („văd mereu pe ecran doar patru acorduri”).
+//
+// Există DOAR în modul „memorat”: în timpul analizei viitorul încă nu e cunoscut, deci n-ar
+// avea ce curge. Mecanica e făcută să nu coste nimic în bucla de 60 fps: cartonașele se
+// așază O SINGURĂ DATĂ, cu poziții absolute în pixeli, iar mișcarea e un singur translateX
+// pe containerul lor. Containerul are `margin-left: 25%`, deci translateX(-t·px) aduce
+// momentul t exact sub linia „acum” — fără să citim vreo dimensiune din pagină.
+
+let reducedMotionMQ = null;
+function prefersReducedMotion() {
+  if (!reducedMotionMQ && window.matchMedia) {
+    reducedMotionMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+  }
+  return !!reducedMotionMQ?.matches;
+}
+
+/** Scara benzii: pixeli pe secundă, aleasă din cât ține un acord obișnuit în melodia asta. */
+function stripPxPerSecond(chords) {
+  const gaps = [];
+  for (let i = 1; i < chords.length; i++) gaps.push(chords[i].t - chords[i - 1].t);
+  if (!gaps.length) return 40;
+  gaps.sort((a, b) => a - b);
+  const median = gaps[Math.floor(gaps.length / 2)] || 2;
+  return Math.max(STRIP_MIN_PX_PER_SEC,
+    Math.min(STRIP_MAX_PX_PER_SEC, STRIP_TARGET_CHIP_PX / median));
+}
+
+/** Construiește banda. Idempotentă, ca bara și foaia — zero reconstrucții din bucla de redare. */
+function buildStrip() {
+  if (!ui.strip) return;
+  if (state.mode !== 'playback' || state.chords.length < 2) {
+    ui.stripWrap.hidden = true;
+    ui.stripKey = null;
+    return;
+  }
+  const last = state.chords[state.chords.length - 1];
+  const key = `${state.videoId}|${state.capo}|${state.transpose}`
+    + `|${state.chords.length}@${last.t.toFixed(0)}|${structureShape()}`;
+  if (ui.stripKey === key) return;
+  ui.stripKey = key;
+  ui.stripWrap.hidden = false;
+
+  const px = stripPxPerSecond(state.chords);
+  state.stripPx = px;
+  ui.strip.innerHTML = '';
+  ui.stripNowEl = null;
+  ui.stripShift = null; // scara s-a putut schimba: forțăm o repoziționare
+
+  // Dedesubt, benzile secțiunilor — vezi „Refren” venind, nu doar acordurile lui.
+  const st = hasUsefulStructure() ? state.structure : null;
+  if (st) {
+    const letters = Object.keys(st.patterns);
+    for (const s of st.sections) {
+      const band = document.createElement('div');
+      band.className = 'ct-strip-band';
+      if (s.cluster) band.dataset.group = String(letters.indexOf(s.cluster) % 5);
+      band.style.left = `${(s.start * px).toFixed(1)}px`;
+      band.style.width = `${Math.max(2, (s.end - s.start) * px - 2).toFixed(1)}px`;
+      band.textContent = sectionLabel(s);
+      ui.strip.appendChild(band);
+    }
+  }
+
+  // Ultimul acord n-are următorul de la care să-și ia lățimea: îi dăm durata medie.
+  const span = last.t - state.chords[0].t;
+  const tail = Math.max(2, span / Math.max(1, state.chords.length - 1));
+  state.chords.forEach((c, i) => {
+    const until = i + 1 < state.chords.length ? state.chords[i + 1].t : c.t + tail;
+    const shown = displayLabel(c.label);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'ct-strip-chip';
+    chip.dataset.index = String(i);
+    chip.dataset.chord = shown;
+    chip.textContent = shown;
+    chip.style.left = `${(c.t * px).toFixed(1)}px`;
+    chip.style.width = `${Math.max(8, (until - c.t) * px - STRIP_GAP_PX).toFixed(1)}px`;
+    chip.classList.toggle('ct-has-diagram', hasDiagram(shown));
+    chip.title = STR.jumpTo(shown);
+    attachChipHover(chip);
+    chip.addEventListener('click', () => seekTo(c.t));
+    ui.strip.appendChild(chip);
+  });
+}
+
+/** Mișcarea: un singur translateX, scris doar când chiar se schimbă. */
+function updateStrip(t) {
+  if (!ui.strip || ui.stripWrap?.hidden) return;
+  // Cu „mișcare redusă” banda NU curge: sare o dată, la schimbarea acordului. Altfel un
+  // element care se mișcă neîncetat sub ochi e exact ce cere setarea asta să nu existe.
+  const at = prefersReducedMotion()
+    ? (state.chords[state.lastIndex]?.t ?? 0)
+    : t;
+  const shift = Math.round(-at * state.stripPx * 10) / 10;
+  if (ui.stripShift === shift) return;
+  ui.stripShift = shift;
+  ui.strip.style.transform = `translateX(${shift}px)`;
+}
+
+/** Aprinde cartonașul de sub linia „acum”. O singură scriere, nu o buclă peste toate. */
+function updateStripHighlight(idx) {
+  if (!ui.strip || ui.stripWrap?.hidden) return;
+  if (ui.stripNow === idx && ui.stripNowEl?.isConnected) return;
+  ui.stripNow = idx;
+  ui.stripNowEl?.classList.remove('is-now');
+  const el = idx >= 0 ? ui.strip.querySelector(`.ct-strip-chip[data-index="${idx}"]`) : null;
+  el?.classList.add('is-now');
+  ui.stripNowEl = el;
 }
 
 // --- Structura melodiei -------------------------------------------------------
@@ -434,6 +576,16 @@ function hasUsefulStructure() {
   return !!st && st.coverage >= MIN_COVERAGE && Object.keys(st.patterns).length > 0;
 }
 
+// Amprenta structurii, pentru cheile de idempotență. Trebuie să vadă CONȚINUTUL secțiunilor,
+// nu doar numărul lor: o reanaliză a aceleiași melodii dă aproape sigur tot atâtea secțiuni,
+// iar cu o cheie bazată pe lungime desenul vechi rămânea pe ecran — inclusiv handler-ele de
+// click, care duceau la granițele vechi. Exact defectul pe care omul încerca să-l repare
+// reanalizând.
+function structureShape() {
+  const st = hasUsefulStructure() ? state.structure : null;
+  return st ? st.sections.map((s) => `${s.cluster || '-'}${s.start.toFixed(0)}`).join(',') : '';
+}
+
 /** Construiește bara și legenda. Idempotent: dacă nimic relevant nu s-a schimbat, iese. */
 function buildStructure() {
   if (!ui.structure) return;
@@ -443,12 +595,7 @@ function buildStructure() {
     return;
   }
   const st = state.structure;
-  // Cheia trebuie să vadă CONȚINUTUL secțiunilor, nu doar numărul lor: o reanaliză a aceleiași
-  // melodii dă aproape sigur tot atâtea secțiuni, iar cu o cheie bazată pe lungime bara veche
-  // rămânea pe ecran — inclusiv handler-ele de click, care duceau la granițele vechi. Exact
-  // defectul pe care utilizatorul încerca să-l repare reanalizând.
-  const shape = st.sections.map((s) => `${s.cluster || '-'}${s.start.toFixed(0)}`).join(',');
-  const key = `${state.videoId}|${state.capo}|${state.transpose}|${shape}`;
+  const key = `${state.videoId}|${state.capo}|${state.transpose}|${structureShape()}`;
   if (ui.barKey === key) return;
   ui.barKey = key;
   ui.structure.hidden = false;
@@ -470,10 +617,7 @@ function buildStructure() {
     seg.textContent = label;
     seg.title = STR.jumpTo(label);
     seg.setAttribute('aria-label', STR.jumpTo(label));
-    seg.addEventListener('click', () => {
-      const video = getVideo();
-      if (video) video.currentTime = s.start + 0.05; // 0.05 ca să cădem SIGUR în secțiune
-    });
+    seg.addEventListener('click', () => seekTo(s.start));
     ui.bar.appendChild(seg);
   });
 }
@@ -502,20 +646,17 @@ function chordsBetween(from, to) {
   return out;
 }
 
-function makeSheetChip(label, seekTo) {
+function makeSheetChip(label, at) {
   const shown = displayLabel(label);
   const chip = document.createElement('span');
   chip.className = 'ct-chip ct-sheet-chip';
   chip.textContent = shown;
   chip.dataset.chord = shown;
-  chip.dataset.t = String(seekTo);
+  chip.dataset.t = String(at);
   chip.tabIndex = 0;
   chip.classList.toggle('ct-has-diagram', hasDiagram(shown));
   attachChipHover(chip);
-  chip.addEventListener('click', () => {
-    const video = getVideo();
-    if (video) video.currentTime = Math.max(0, seekTo) + 0.05;
-  });
+  chip.addEventListener('click', () => seekTo(at));
   return chip;
 }
 
@@ -531,10 +672,7 @@ function sheetRow({ tag, group, chips, reps, index }) {
     if (group !== null) label.dataset.group = String(group);
     label.textContent = tag.text;
     label.title = STR.jumpTo(tag.text);
-    label.addEventListener('click', () => {
-      const video = getVideo();
-      if (video) video.currentTime = tag.start + 0.05;
-    });
+    label.addEventListener('click', () => seekTo(tag.start));
     row.appendChild(label);
   }
 
@@ -563,8 +701,7 @@ function buildSheet() {
   }
   const st = hasUsefulStructure() ? state.structure : null;
   const key = `${state.videoId}|${state.capo}|${state.transpose}|`
-    + (st ? st.sections.map((s) => `${s.cluster || '-'}${s.start.toFixed(0)}`).join(',')
-          : `plat:${state.chords.length}`);
+    + (st ? structureShape() : `plat:${state.chords.length}`);
   if (ui.sheetKey === key) return;
   ui.sheetKey = key;
   ui.sheetWrap.hidden = false;
@@ -700,7 +837,7 @@ function updateCurrentSection(t) {
   // Anunțul secțiunii următoare, cu câteva secunde înainte de graniță.
   const next = st.sections[idx + 1];
   const soon = next && current.end - t <= ANNOUNCE_AHEAD;
-  ui.nextLabel.textContent = soon ? STR.upNextSection(sectionLabel(next)) : STR.upNext;
+  ui.nextLabel.textContent = soon ? STR.upNextSection(sectionLabel(next)) : '';
   ui.nextLabel.classList.toggle('is-announce', !!soon);
 }
 
@@ -789,6 +926,7 @@ function startClock() {
   state.lastSection = -1;
   ui.barKey = null;       // reanaliza trebuie să reconstruiască bara, nu s-o creadă valabilă
   ui.sheetKey = null;
+  ui.stripKey = null;
   clearInterval(state.timeInterval);
   state.timeInterval = setInterval(() => {
     const video = getVideo();
@@ -841,6 +979,9 @@ function startPlayback() {
       // dar tot doar de câteva ori pe minut. updateSheetHighlight iese singură dacă nimic
       // nu s-a schimbat, deci nu atinge DOM-ul la fiecare cadru.
       updateSheetHighlight(t);
+      // Singura scriere care CHIAR se face la fiecare cadru: transformul benzii. E o
+      // proprietate compozitată, deci nu declanșează recalcul de layout.
+      updateStrip(t);
     }
     state.rafId = requestAnimationFrame(tick);
   };

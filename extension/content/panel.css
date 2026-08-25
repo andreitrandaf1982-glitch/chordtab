@@ -153,6 +153,102 @@
   font-weight: 600;
 }
 
+/* --- banda rulantă: acordurile curg spre linia „acum” --- */
+
+.ct-strip-wrap {
+  padding: 10px 0 2px;
+  border-bottom: 1px solid rgba(244, 242, 236, 0.12);
+}
+
+.ct-strip-wrap[hidden] { display: none; }
+
+.ct-strip-view {
+  position: relative;
+  overflow: hidden;
+  height: 62px;
+  /* Capetele se topesc, ca acordurile să nu apară și să dispară brusc pe margini. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+}
+
+/* `margin-left: 25%` face ca translateX(-t·px) să aducă momentul t exact sub linia „acum”.
+   Fără el ar trebui să citim lățimea vizibilă la fiecare cadru — adică recalcul de layout
+   la 60 fps, exact ce nu vrem. Nu-l scoate. */
+.ct-strip {
+  position: relative;
+  height: 100%;
+  margin-left: 25%;
+  will-change: transform;
+}
+
+.ct-strip-chip {
+  position: absolute;
+  top: 0;
+  height: 40px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(48, 88, 240, 0.20);
+  border: 1px solid var(--ct-blue-dark);
+  border-radius: 8px;
+  color: var(--ct-paper);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 0 2px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: background-color 90ms linear;
+}
+
+.ct-strip-chip:hover { background: rgba(48, 88, 240, 0.38); }
+
+.ct-strip-chip.is-now {
+  background: var(--ct-blue);
+  border-color: var(--ct-blue-bright);
+  box-shadow: 0 0 0 1px var(--ct-blue-bright);
+}
+
+/* Banda secțiunii, sub acorduri: vezi „Refren” venind, nu doar acordurile lui. */
+.ct-strip-band {
+  position: absolute;
+  bottom: 0;
+  height: 16px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  background: rgba(244, 242, 236, 0.14);
+  color: var(--ct-paper);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  padding: 0 6px;
+  opacity: 0.75;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.ct-strip-band[data-group="0"] { background: var(--ct-g0); }
+.ct-strip-band[data-group="1"] { background: var(--ct-g1); }
+.ct-strip-band[data-group="2"] { background: var(--ct-g2); }
+.ct-strip-band[data-group="3"] { background: var(--ct-g3); }
+.ct-strip-band[data-group="4"] { background: var(--ct-g4); }
+
+.ct-strip-line {
+  position: absolute;
+  left: 25%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ct-paper);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
 /* --- structura melodiei: bara + legenda --- */
 
 /* Nuanțe derivate din albastrul de brand, ca panoul să rămână al lui. */

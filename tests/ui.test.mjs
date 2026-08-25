@@ -122,7 +122,17 @@ try {
   });
 
   const currentChord = () => page.locator('#chordtab-panel .ct-current').textContent();
-  const upcoming = () => page.locator('#chordtab-panel .ct-next-list .ct-chip').allTextContents();
+  const stripChips = () => page.locator('#chordtab-panel .ct-strip-chip');
+  // „Ce urmează” se citește acum de pe BANDĂ: cartonașele de după cel aprins. Lista statică de
+  // trei chip-uri a dispărut din modul memorat (era exact reclamația lui Andrei).
+  const upcoming = async (n = 3) => {
+    const all = (await stripChips().allTextContents()).map((s) => s.trim());
+    const idx = await page.evaluate(() => {
+      const el = document.querySelector('#chordtab-panel .ct-strip-chip.is-now');
+      return el ? Number(el.dataset.index) : -1;
+    });
+    return all.slice(idx + 1, idx + 1 + n);
+  };
   // Așteptăm ca media să fie încărcată, altfel currentTime nu se poate poziționa.
   await page.waitForFunction(() => {
     const v = document.querySelector('video');
@@ -150,6 +160,75 @@ try {
     await seek(1);
     const next = await upcoming();
     assert.deepEqual(next, ['D', 'Am', 'C'], `„urmează” greșit: ${JSON.stringify(next)}`);
+  });
+
+  // --- PAȘII 1-3: banda rulantă ---
+
+  await check('Pasul 1: banda arată melodia ÎNTREAGĂ, în ordine', async () => {
+    await page.locator('#chordtab-panel .ct-strip-wrap').waitFor({ state: 'visible', timeout: 5000 });
+    const labels = (await stripChips().allTextContents()).map((s) => s.trim());
+    assert.deepEqual(labels, ['G', 'D', 'Am', 'C'],
+      `banda trebuie să conțină toate acordurile memorate: ${JSON.stringify(labels)}`);
+    // Lățimea fiecărui cartonaș spune cât ține acordul — asta e ce lipsea listei „urmează”.
+    const widths = await stripChips().evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    assert.ok(widths.every((w) => w > 10), `cartonașe fără lățime: ${JSON.stringify(widths)}`);
+  });
+
+  await check('Pasul 2: cartonașul aprins e acordul care sună acum', async () => {
+    await seek(9);
+    await page.waitForFunction(
+      () => document.querySelector('#chordtab-panel .ct-strip-chip.is-now')?.textContent?.trim() === 'Am',
+      null, { timeout: 5000 });
+    assert.equal(await page.locator('#chordtab-panel .ct-strip-chip.is-now').count(), 1,
+      'exact un cartonaș trebuie aprins');
+  });
+
+  await check('Pasul 2: click pe un acord de pe bandă sare acolo', async () => {
+    await seek(1);
+    await page.locator('#chordtab-panel .ct-strip-chip[data-index="3"]').click();
+    await page.waitForTimeout(300);
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    assert.ok(Math.abs(t - 12) <= 1.5, `după click sunt la ${t.toFixed(1)}s, aștept ~12s`);
+  });
+
+  await check('Pasul 3: banda curge cu melodia; cu mișcare redusă stă pe loc', async () => {
+    const transform = () => page.evaluate(() =>
+      getComputedStyle(document.querySelector('#chordtab-panel .ct-strip')).transform);
+    await seek(4.5);
+    await page.evaluate(async () => {
+      const v = document.querySelector('video');
+      v.muted = true;                       // fără „muted”, politica de autoplay refuză play()
+      try { await v.play(); } catch { /* dacă tot nu pornește, verificarea de mai jos o spune */ }
+    });
+    const a = await transform();
+    await page.waitForTimeout(500);
+    const b = await transform();
+    assert.notEqual(a, b, 'banda nu curge deloc cât timp melodia merge');
+
+    // Cu „mișcare redusă” banda NU are voie să curgă continuu: sare doar la schimbarea
+    // acordului. Rămânem bine în interiorul aceluiași acord (D ține de la 4s la 8s).
+    await seek(4.2);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForTimeout(200);
+    const c = await transform();
+    await page.waitForTimeout(500);
+    const d = await transform();
+    assert.equal(c, d, 'cu „mișcare redusă” banda curge — trebuie să stea pe loc');
+    await page.emulateMedia({ reducedMotion: null });
+    await page.evaluate(() => document.querySelector('video').pause());
+  });
+
+  await check('Banda nu pâlpâie când redarea stă pe loc', async () => {
+    await seek(5);
+    await page.evaluate(() => {
+      window.__stripMut = 0;
+      const el = document.querySelector('#chordtab-panel .ct-strip');
+      window.__stripObs = new MutationObserver((r) => { window.__stripMut += r.length; });
+      window.__stripObs.observe(el, { childList: true, subtree: true, attributes: true });
+    });
+    await page.waitForTimeout(1500);
+    const mut = await page.evaluate(() => { window.__stripObs.disconnect(); return window.__stripMut; });
+    assert.ok(mut <= 2, `${mut} modificări pe bandă cu redarea oprită — se rescrie degeaba`);
   });
 
   await check('Pasul 6: transpoziția mută toate acordurile', async () => {
@@ -208,7 +287,7 @@ try {
 
   await check('Pasul 7: hover pe un acord care urmează îi arată diagrama, apoi revine', async () => {
     await seek(1);
-    await page.hover('#chordtab-panel .ct-next-list .ct-chip >> nth=1'); // Am
+    await page.hover('#chordtab-panel .ct-strip-chip[data-index="2"]'); // Am, de pe bandă
     await page.waitForFunction(
       () => document.querySelector('#chordtab-panel .ct-d-name')?.textContent?.trim() === 'Am',
       null, { timeout: 5000 });
@@ -235,7 +314,7 @@ try {
       window.__obs = new MutationObserver((recs) => { window.__mutations += recs.length; });
       window.__obs.observe(slot, { childList: true, subtree: true, attributes: true });
     });
-    await page.hover('#chordtab-panel .ct-next-list .ct-chip >> nth=0');
+    await page.hover('#chordtab-panel .ct-strip-chip[data-index="1"]');
     await page.waitForTimeout(1500); // stăm pe loc: nimic nu trebuie să se mai schimbe
     const mutations = await page.evaluate(() => { window.__obs.disconnect(); return window.__mutations; });
     // O singură schimbare (înlocuirea diagramei) e normală. Zeci înseamnă buclă.
@@ -291,6 +370,13 @@ try {
     // Panoul trebuie să treacă în „ascult” și să arate ultimul acord primit.
     await waitFor('nu a ajuns la acordul A după CHORD_EVENT',
       () => document.querySelector('#chordtab-panel .ct-current')?.textContent?.trim() === 'A');
+
+    // Banda ține de melodia MEMORATĂ: în timpul analizei viitorul încă nu e cunoscut, deci
+    // n-ar avea ce să curgă. În schimb reapare lista „până acum”.
+    assert.equal(await page.locator('#chordtab-panel .ct-strip-wrap:visible').count(), 0,
+      'banda nu are ce căuta în timpul analizei');
+    assert.ok((await page.locator('#chordtab-panel .ct-next-list .ct-chip').count()) > 0,
+      'în timpul analizei rămâne lista cu acordurile de până acum');
 
     // Salvarea e amânată 3s ca să nu scriem la fiecare acord.
     await page.waitForTimeout(4000);
