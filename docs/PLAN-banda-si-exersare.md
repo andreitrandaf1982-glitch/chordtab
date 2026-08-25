@@ -149,3 +149,8 @@ listening viitorul nu există încă — rămâne afișajul curent (acord mare +
 - Metronom / count-in la intrarea în loop-ul de exersare.
 - „Mai puțin la final” — Andrei a semnalat vag o detecție mai slabă la sfârșitul unei melodii;
   de cerut link-ul și de investigat separat dacă revine.
+- Trecerea la melodia URMĂTOARE după final (Andrei, 2026-08-25, pe v0.5.0): „e contraintuitiv
+  să dai reload ca să treci la următoarea melodie… dacă nu ești atent, dai back”. De observat
+  fluxul real: `ended` → oprire automată → autoplay YouTube → navigare SPA → panou resetat —
+  unde anume se pierde omul. Auditul 2 primește întrebarea explicit; posibilă rezolvare mică
+  în linia „Pasul 2” („deschide altă melodie și ia-o de la capăt”).
