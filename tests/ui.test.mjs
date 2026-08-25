@@ -59,6 +59,9 @@ const FAKE_PAGE = `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><t
     <video class="html5-main-video" src="data:audio/wav;base64,${silentWav()}" preload="auto"></video>
   </div></div>
   <div id="below"><div id="comments">comentarii</div></div>
+  <!-- Pagina trebuie să fie ÎNALTĂ și derulabilă: fără asta nu se poate dovedi că panoul
+       nu smucește YouTube-ul înapoi la el la fiecare acord (defectul critic al auditului 2). -->
+  <div id="umplutura" style="height: 3000px"></div>
 </body></html>`;
 
 const profile = mkdtempSync(join(tmpdir(), 'chordtab-ui-'));
@@ -714,6 +717,45 @@ try {
     await page.waitForTimeout(1500);
     const mut = await page.evaluate(() => { window.__structObs.disconnect(); return window.__structMut; });
     assert.ok(mut <= 2, `${mut} modificări în structură cu redarea oprită — se reconstruiește degeaba`);
+  });
+
+  // --- AUDIT 2, defectul critic: foaia derula PAGINA YouTube întreagă ---
+  await check('Foaia nu mai trage pagina YouTube înapoi la panou', async () => {
+    await seek(2);
+    await page.evaluate(() => window.scrollTo(0, 2000));
+    await page.waitForTimeout(200);
+    const before = await page.evaluate(() => window.scrollY);
+    assert.ok(before > 500, `pagina trebuie să fie derulată ca proba să însemne ceva (${before}px)`);
+    // Traversăm mai multe acorduri ȘI granița dintre strofă și refren (32s) — exact
+    // momentele în care evidențierea din foaie se muta și smucea pagina.
+    for (const t of [10, 20, 33, 36, 40]) {
+      await page.evaluate((x) => { document.querySelector('video').currentTime = x; }, t);
+      await page.waitForTimeout(250);
+    }
+    const after = await page.evaluate(() => window.scrollY);
+    assert.equal(after, before,
+      `pagina a sărit de la ${before}px la ${after}px cât timp melodia rula`);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(200);
+  });
+
+  await check('Foaia se derulează totuși în interiorul ei, la schimbarea rândului', async () => {
+    // Îngustăm foaia ca rândul 4 să nu încapă, apoi sărim în el: doar .ct-sheet trebuie
+    // să se deruleze, nu pagina.
+    await page.evaluate(() => {
+      document.querySelector('#chordtab-panel .ct-sheet').style.maxHeight = '60px';
+    });
+    await seek(2);
+    await page.waitForTimeout(300);
+    const top0 = await page.evaluate(() => document.querySelector('#chordtab-panel .ct-sheet').scrollTop);
+    await seek(70); // ultima secțiune
+    await page.waitForTimeout(400);
+    const top1 = await page.evaluate(() => document.querySelector('#chordtab-panel .ct-sheet').scrollTop);
+    assert.ok(top1 > top0,
+      `foaia trebuie să se deruleze la rândul curent (${top0} → ${top1})`);
+    await page.evaluate(() => {
+      document.querySelector('#chordtab-panel .ct-sheet').style.maxHeight = '';
+    });
   });
 
   await check('Pasul 6: foaia nu pâlpâie când redarea stă pe loc', async () => {

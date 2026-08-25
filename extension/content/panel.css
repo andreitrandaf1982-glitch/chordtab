@@ -420,6 +420,9 @@
   flex-direction: column;
   gap: 4px;
   margin-top: 6px;
+  /* position: relative ca offsetTop-ul rândurilor să fie relativ la FOAIE — derularea
+     evidențierii se face manual, pe containerul ăsta (vezi updateSheetHighlight). */
+  position: relative;
   /* Melodiile lungi se derulează în interiorul foii — panoul nu are voie să crească la
      nesfârșit peste pagina YouTube. */
   max-height: 300px;

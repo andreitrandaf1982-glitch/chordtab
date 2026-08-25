@@ -904,6 +904,9 @@ function buildSheet() {
   ui.sheetKey = key;
   ui.sheetWrap.hidden = false;
   ui.sheet.innerHTML = '';
+  // Foaie nouă = derulare nouă. Se resetează DOAR aici, nu la fiecare render: altfel
+  // „rândul s-a schimbat” ar fi adevărat mereu și foaia s-ar re-derula la fiecare acord.
+  ui.sheetRowLast = null;
 
   if (!st) {
     // Fără structură: un singur rând cu toată melodia, tot clickabil.
@@ -990,8 +993,21 @@ function updateSheetHighlight(t) {
     for (let k = 0; k < chips.length; k++) {
       chips[k].classList.toggle('is-now', isCurrent && k === chipIdx);
     }
-    if (isCurrent) rows[i].scrollIntoView({ block: 'nearest' });
+    // NU folosi scrollIntoView aici. „nearest” înseamnă „deplasare minimă”, nu „doar
+    // containerul interior”: API-ul derulează TOȚI strămoșii derulabili, inclusiv pagina.
+    // Cu panoul sub linia de plutire, YouTube-ul era smucit înapoi la panou la fiecare
+    // acord — nu mai puteai citi comentariile cât timp melodia rula.
+    // Și doar la schimbarea RÂNDULUI: altfel foaia fuge de sub cursor când o derulezi singur.
+    if (isCurrent && rowIdx !== ui.sheetRowLast) {
+      const top = rows[i].offsetTop;
+      const bottom = top + rows[i].offsetHeight;
+      if (top < ui.sheet.scrollTop) ui.sheet.scrollTop = top;
+      else if (bottom > ui.sheet.scrollTop + ui.sheet.clientHeight) {
+        ui.sheet.scrollTop = bottom - ui.sheet.clientHeight;
+      }
+    }
   }
+  ui.sheetRowLast = rowIdx;
 }
 
 /** Indexul secțiunii care conține momentul t (căutare binară). -1 dacă nu există. */
