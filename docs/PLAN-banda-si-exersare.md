@@ -27,6 +27,21 @@ contra-intuitivă, greoaie, nu face mai mult decât să arate acorduri static; f
 
 ---
 
+## STARE: toți pașii executați (Opus, 2026-08-25) — v0.4.0 livrată
+
+| Pas | Stare | Commit |
+|---|---|---|
+| 0 — nume de secțiuni | ✅ Poarta 0 trecută (31 verificări UI + captură) | `d061912` |
+| 1–3 — banda rulantă | ✅ Poarta 3 trecută (36 verificări, inclusiv reduced-motion) | `c370928` |
+| 4 — exersare | ✅ Poarta 4 trecută (42 verificări) | `0097d6f` |
+| 5 — ambalare | ✅ Poarta 5 trecută | acest commit |
+
+**Abatere conștientă de la plan, la Pasul 4:** butonul ⟳ e doar pe rândurile foii, nu și pe
+segmentele barei — un `<button>` în interiorul altui `<button>` e HTML invalid. Bara rămâne
+pentru salt, foaia pentru exersare.
+
+---
+
 ## Pasul 0 — Numele secțiunilor pe românește (cerut explicit de Andrei)
 
 „A · liber / B / C” e limbaj de laborator. Se schimbă DOAR prezentarea (content + strings);

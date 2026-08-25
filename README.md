@@ -1,10 +1,11 @@
 # ChordTab — acorduri de chitară pentru YouTube
 
 Extensie Chrome care ascultă melodia din tabul de YouTube **local, în browserul tău**
-(zero servere, zero chei API, zero costuri) și afișează acordurile principale sincronizate
-cu redarea — cu diagrame la hover, sugestie de capo și transpoziție.
+(zero servere, zero chei API, zero costuri) și îți arată acordurile venind pe o bandă
+sincronizată cu melodia — cu diagrame pe corzi, exersare pe secțiuni, capo și transpoziție.
 
-**Stare:** v0.3.0 — Etapa 1, structura melodiei, foaia melodiei, plus reparațiile
+**Stare:** v0.4.0 — banda rulantă și modul de exersare
+([plan](docs/PLAN-banda-si-exersare.md)), peste structura melodiei și reparațiile
 [auditului adversarial](docs/PLAN-reparatii-audit.md).
 Planul complet: [docs/PLAN-guitar-chords-extension.md](docs/PLAN-guitar-chords-extension.md) ·
 Ce e de verificat: [docs/VERIFICARE.md](docs/VERIFICARE.md)
@@ -20,11 +21,16 @@ F#m A E B, dar cu capo 2 cânți Em G D A. Bara albastră din diagramă e capoda
 
 ![Structura melodiei](docs/capturi/panou-structura.png)
 
-**Structura melodiei**, găsită singură din repetiții: bara arată unde e strofa și unde e
-refrenul. Sub ea, **foaia melodiei** — cântecul întreg, un rând per secțiune, în ordine.
-Click pe orice acord sau pe orice segment te duce exact acolo, iar acordul care sună acum e
-aprins, ca să știi mereu unde ești. Melodiile fără structură clară primesc tot o foaie, cu
-toate acordurile.
+**Banda rulantă**: acordurile curg spre linia „acum", cu lățimea proporțională cu cât ține
+fiecare — deci vezi și ritmul, nu doar ordinea. Dedesubt, benzile secțiunilor: vezi „Refren"
+venind. Sub ea, **structura melodiei**, găsită singură din repetiții, și **foaia melodiei** —
+cântecul întreg, un rând per secțiune, în ordine. Click pe orice acord te duce exact acolo.
+Melodiile fără structură clară primesc tot o foaie, cu toate acordurile.
+
+![Modul de exersare](docs/capturi/panou-exersare.png)
+
+**Exersare**: apeși ⟳ pe refren și îl pui pe repetat, încetinit la 0,75× sau 0,5× **fără să
+se schimbe tonalitatea**. Îl cânți până iese, apoi „Gata" te readuce la viteza dinainte.
 
 ## Instalare
 
@@ -96,9 +102,11 @@ Totul e cod propriu, fără biblioteci externe și fără WebAssembly. Nimic nu 
 
 ## Ce face, pe scurt
 
-- **Acordurile sincronizate** cu melodia, sub video, cu ce urmează la vedere.
+- **Banda rulantă**: acordurile vin spre linia „acum", late cât țin de mult. Click pe oricare
+  te duce acolo. Cu „mișcare redusă" pornită în sistem, banda nu curge — sare la fiecare acord.
 - **Diagrama pe corzi** a acordului curent, mereu vizibilă; hover pe unul care urmează ți-o arată
   pe a lui.
+- **Exersare**: o secțiune pe repetat, la 0,5× / 0,75× / 1×, fără schimbarea tonalității.
 - **Structura melodiei**: strofă, refren, punte — găsite din repetiții. Îți arată și în ce
   secțiune ești acum.
 - **Foaia melodiei**: cântecul întreg, un rând per secțiune, cu acordurile pe care poți da

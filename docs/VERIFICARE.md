@@ -1,80 +1,91 @@
-# Verificare în Chrome — **v0.3.0: foaia melodiei + reparațiile auditului**
+# Verificare în Chrome — **v0.4.0: banda rulantă și exersarea**
 
 Document viu: descrie mereu ce e de verificat ACUM.
 
 ---
 
-## Ce e nou: foaia melodiei
+## Ce e nou
 
-Asta ai cerut: „văd mereu doar patru acorduri… n-am ceva istoric să văd melodia sau să derulez
-înainte-înapoi pe bucăți."
+Feedbackul tău pe v0.3.0 a fost: „pare contra-intuitivă, greoaie, nu face mai mult decât să
+arate acorduri static… foaia pare învechită. VREAU MULT MAI MULT CALITATIV.” Astea sunt
+răspunsurile.
 
-![Foaia melodiei](capturi/panou-structura.png)
+### 1. Numele secțiunilor, pe românește
 
-Sub bara de structură, acum vezi **cântecul întreg** — un rând pentru fiecare secțiune, în
-ordinea în care se cântă (nu dedublat ca înainte). Rândul în care ești e evidențiat, iar
-**acordul care sună chiar acum e aprins în albastru**, ca să știi mereu unde te afli.
+![Banda rulantă](capturi/panou-structura.png)
 
-**Click pe orice acord te duce exact acolo.** Ăsta e derulatul pe bucăți: vrei să exersezi al
-doilea refren, dai click pe el. Click pe eticheta secțiunii („B · Refren") sare la începutul ei.
+„A · liber / B / C” era limbaj de laborator. Acum scrie **Intro, Strofă, Refren, Punte,
+Final** — iar acolo unde extensia nu e sigură ce e o bucată, scrie **„Partea 1”, „Partea 2”**,
+numerotate în ordinea în care le auzi. Același grup are același număr oriunde revine. Litera
+n-a dispărut, doar s-a mutat în interior, unde ține culorile.
 
-Melodiile lungi se derulează în interiorul foii, ca panoul să nu crească peste tot ecranul.
-Iar melodiile fără structură clară primesc tot o foaie — cu toate acordurile, tot clickabile.
+### 2. Banda rulantă — asta înlocuiește lista de trei acorduri
 
----
+Acordurile **curg spre linia albă „acum”**, ca la karaoke. Fiecare cartonaș e **lat cât ține
+acordul**, deci se citește și ritmul, nu doar ordinea: vezi din privire că refrenul stă două
+măsuri pe Em și apoi trece repede prin C și G.
 
-## Ce s-a reparat din audit
+Dedesubt curge și **banda secțiunii**, cu numele scris în ea — vezi „Refren” venind, nu doar
+acordurile lui. Click pe orice cartonaș te duce acolo.
 
-Auditul adversarial a găsit 10 defecte reale. Cele pe care le-ai putea observa:
+### 3. Modul de exersare — pentru mine, ăsta e saltul
 
-**Pauza de peste 30 de secunde nu mai rupe analiza.** Înainte, dacă puneai pauză și te
-întorceai, acordurile nu mai apăreau, iar butonul „Oprește" ștergea ce se strânsese. Starea
-capturii se ține acum într-un loc care supraviețuiește.
+![Modul de exersare](capturi/panou-exersare.png)
 
-**F5 în timpul analizei** nu mai lasă o captură-fantomă care consuma resurse și inversa butonul.
+În foaie, fiecare secțiune are acum un buton **⟳**. Apeși pe cel de la refren și:
 
-**Reclamele nu se mai scriu peste melodie.** Ceasul intern îngheață când nu primește semnal,
-deci acordurile reclamei nu mai ajung pe cronologia cântecului.
-
-**Derularea înapoi în timpul analizei** nu mai strică ordinea acordurilor (și deci nici redarea
-memorată). Memoria veche, dacă era deja stricată, se repară singură la încărcare.
-
-**Panoul nu mai apare pe pagina principală YouTube** — doar pe paginile de video, unde are sens.
-
-Plus două defecte de matematică pe care nu le puteai vedea, dar le auzeai: un acord ținut mult
-timp putea fi suprimat definitiv după o detecție greșită, iar pasajele fără bas (fingerpicking,
-capo sus) primeau tăcut un prag mai sever și ieșeau „N.C." degeaba.
-
-Și una pentru comunitate: **arhiva se strica pentru utilizatorii de Mac și Linux**. Se
-construia cu o unealtă Windows care scrie căile greșit. Acum se construiește corect, iar
-build-ul refuză să producă o arhivă stricată.
+- refrenul intră **pe repetat** — se cântă la nesfârșit, până spui tu stop;
+- îl poți **încetini la 0,75× sau 0,5×, fără să se schimbe tonalitatea** (acordurile afișate
+  rămân exact acordurile pe care le auzi — asta e partea la care conta să nu greșim);
+- **„Gata”** te scoate și îți pune înapoi **viteza pe care o aveai tu înainte**, nu 1 orbește;
+- dacă sari singur în altă parte a melodiei, exersarea se oprește — ai plecat intenționat.
 
 ---
 
 ## Ce te rog să verifici
 
-Reload la extensie, apoi pe o melodie deja memorată:
+Reload la extensie (`chrome://extensions` → ChordTab → săgeata circulară), apoi pe o melodie
+deja memorată:
 
-1. **Foaia** — vezi cântecul întreg? Rândurile corespund cu ce auzi?
-2. **Click pe un acord din foaie** — sare unde trebuie?
-3. **Acordul aprins** se mișcă odată cu melodia, pe rândul corect?
-4. **Proba de pauză**: pornește analiza, pune pauză 60 de secunde, reia. Acordurile trebuie să
-   continue să apară.
-5. **Proba de refresh**: în timpul analizei dă F5. După reîncărcare, apasă iconița — trebuie să
-   pornească o analiză nouă, curat.
-6. **Pagina principală YouTube** — panoul nu mai are voie să apară acolo.
+1. **Banda** — acordurile vin spre linia albă și cel de sub ea e chiar ce se aude?
+2. **Lățimile** — un acord care ține mult e vizibil mai lat decât unul scurt?
+3. **⟳ pe refren** — sare la începutul lui și îl repetă la nesfârșit?
+4. **0,75×** — melodia e mai lentă, dar **nu mai gravă**? (asta e proba care contează)
+5. **„Gata”** — te scoate din buclă și revine la viteza dinainte?
+6. **Numele** — vezi „Strofă / Refren” sau „Partea 1 / Partea 2”, nicăieri „A ·” sau „B ·”?
+7. **Click pe un acord de pe bandă** — te duce fix acolo?
+
+Și una pentru cei cu setări de accesibilitate: dacă pornești **„mișcare redusă”** în Windows
+(Setări → Accesibilitate → Efecte vizuale → Efecte de animație oprit), banda nu mai trebuie să
+curgă continuu — sare o dată, la fiecare schimbare de acord. Restul funcționează la fel.
+
+---
+
+## Ce am renunțat să facem, și de ce
+
+**Profesorul AI pe Gemini Nano** — respins de tine, cu dreptate: fiecare utilizator ar fi
+trebuit să descarce 2–4 GB și să aibă o placă video peste cerințe. Ar fi fost invizibil exact
+pentru oamenii din comunitate și din juriu. Proba construită pentru el a fost scoasă complet.
+
+**Extensia te ascultă cântând la microfon** — respinsă tot de tine: chitările amatorilor sunt
+des dezacordate, iar un verdict „greșit” ar fi părut defectul extensiei, nu al acordajului.
+
+Amândouă sunt scrise ca decizii ferme în [planul de lucru](PLAN-banda-si-exersare.md), ca să
+nu reapară.
 
 ---
 
 ## Starea proiectului
 
-`npm test` = 30 de verificări doar în interfață, plus testele de algoritm.
+`npm test` = 42 de verificări doar în interfață, plus testele de algoritm.
 `npm run test:package` verifică arhiva, inclusiv separatoarele din zip.
-Arhiva v0.3.0: 23 de fișiere, 52 KB.
 
 ## Ce a rămas dinadins nereparat
 
-Backlogul e scris la finalul [planului de reparații](docs/PLAN-reparatii-audit.md): în timpul
-unei reclame panoul afișează acordul greșit (se corectează singur la final), memoria de acorduri
-crește nelimitat, iar mixurile cu peste 10 bucle distincte confundă literele. Toate sunt
-marginale — le luăm când și dacă devin supărătoare.
+Backlogul e la finalul [planului](PLAN-banda-si-exersare.md) și al
+[celui de reparații](PLAN-reparatii-audit.md): pagina de opțiuni e încă pe verdele vechi,
+în timpul unei reclame panoul afișează acordul greșit (se corectează singur la final),
+memoria de acorduri crește nelimitat. Toate sunt marginale.
+
+**Urmează**, după ce încerci tu: un singur audit adversarial pe toată extensia, înainte de
+trimiterea la concurs.
