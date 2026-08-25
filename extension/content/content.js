@@ -47,6 +47,7 @@ const state = {
   stripPx: 40,        // scara benzii rulante, în pixeli pe secundă
   practice: null,     // { index, start, end, label, prevRate } — secțiunea pusă pe repetat
   practiceRate: 1,    // viteza aleasă pentru exersare (ține între secțiuni)
+  practiceVideo: null, // elementul pe care ascultăm „timeupdate” cât timp exersăm
   clockVideo: null,   // elementul <video> pe care ascultăm „ended” cât timp analizăm
   lastClockT: 0,      // ultimul timp trimis prin CT_TIME (ca să prindem reluarea buclei)
   timeInterval: null,
@@ -126,8 +127,16 @@ function cacheKey(videoId = state.videoId) {
 async function loadCache() {
   if (!state.videoId) return;
   try {
-    const key = cacheKey();
+    const id = state.videoId;
+    const key = cacheKey(id);
     const stored = (await chrome.storage.local.get(key))[key];
+    // Citirea e asincronă, iar YouTube e un SPA: la două navigări rapide, promisiunea asta
+    // se poate rezolva pe pagina ALTUI video. Fără garda de mai jos, acordurile melodiei
+    // dinainte se aplicau peste cea curentă și porneau redarea, sincronizate pe timpul greșit.
+    if (id !== state.videoId) {
+      log.debug('S-a navigat între timp — memoria citită e a altui video.');
+      return;
+    }
     if (!stored || stored.version !== CACHE_VERSION || !stored.chords?.length) return;
     // Citirea din memorie e asincronă. Dacă între timp a pornit o analiză nouă, ea are
     // prioritate — altfel am șterge exact acordurile care tocmai se strâng.
@@ -528,6 +537,13 @@ function applyRate(rate) {
   video.playbackRate = rate;
 }
 
+// requestAnimationFrame TACE în taburile ascunse, iar bucla de exersare trăia numai acolo:
+// treceai pe alt tab ca să cauți ritmul și melodia curgea nestingherită dincolo de secțiune,
+// la 0,5×, prin toată piesa. „timeupdate” bate și în taburi ascunse.
+function onPracticeTime() {
+  if (state.practice && state.practiceVideo) tickPractice(state.practiceVideo.currentTime);
+}
+
 function startPractice(index, range) {
   const video = getVideo();
   if (!video || range.end - range.start <= PRACTICE_MIN_SECONDS) return;
@@ -536,6 +552,10 @@ function startPractice(index, range) {
   const prevRate = state.practice ? state.practice.prevRate : video.playbackRate;
   state.practice = { index, start: range.start, end: range.end, label: range.label, prevRate };
   applyRate(state.practiceRate);
+  // Dubla execuție (rAF + timeupdate) în tabul vizibil e inofensivă: tickPractice e idempotent.
+  state.practiceVideo?.removeEventListener('timeupdate', onPracticeTime);
+  state.practiceVideo = video;
+  video.addEventListener('timeupdate', onPracticeTime);
   seekTo(range.start);
   render();
 }
@@ -544,6 +564,8 @@ function stopPractice(silent = false) {
   if (!state.practice) return;
   const { prevRate } = state.practice;
   state.practice = null;
+  state.practiceVideo?.removeEventListener('timeupdate', onPracticeTime);
+  state.practiceVideo = null;
   // Înapoi la viteza pe care o avea OMUL, nu orbește 1: putea să aibă deja YouTube-ul pe 1,25.
   applyRate(prevRate);
   if (!silent) render();

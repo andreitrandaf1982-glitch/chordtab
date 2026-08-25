@@ -729,6 +729,22 @@ try {
     assert.ok(t >= 31.9, `bucla a sărit prea departe înapoi: ${t.toFixed(1)}s`);
   });
 
+  await check('Pasul 4: bucla se închide și din „timeupdate" (calea din tabul ascuns)', async () => {
+    // requestAnimationFrame tace în taburile ascunse, deci bucla nu poate depinde doar de el.
+    // Dovedim că „timeupdate" singur o închide: poziționăm dincolo de graniță și emitem
+    // evenimentul cu mâna, fără să lăsăm melodia să ruleze (deci fără niciun tick util).
+    await page.evaluate(() => {
+      const v = document.querySelector('video');
+      v.currentTime = 47.99;
+      v.dispatchEvent(new Event('timeupdate'));
+    });
+    await page.waitForFunction(
+      () => document.querySelector('video').currentTime < 34,
+      null, { timeout: 5000 });
+    const t = await page.evaluate(() => document.querySelector('video').currentTime);
+    assert.ok(t >= 31.9, `bucla a sărit prea departe înapoi: ${t.toFixed(1)}s`);
+  });
+
   await check('Pasul 4: viteza se schimbă fără să schimbe tonalitatea', async () => {
     await page.click('#chordtab-panel .ct-speed[data-rate="0.75"]');
     await page.waitForTimeout(200);

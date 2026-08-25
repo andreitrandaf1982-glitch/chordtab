@@ -86,7 +86,16 @@ async function toggleCapture(tab, reason, want = null) {
       if (want !== true) await stopCapture(reason);
       return;
     }
-    if (state.capturingTabId !== null) await stopCapture('captură nouă pe alt tab');
+    if (state.capturingTabId !== null) {
+      // Cerem întâi permisiunea pentru tabul NOU și abia apoi o oprim pe cea veche. Invers,
+      // o analiză bună de pe tabul A era sacrificată pentru o pornire care nu putea reuși:
+      // pe un tab în care extensia n-a fost invocată, getMediaStreamId aruncă, iar A rămânea
+      // oprit la jumătatea melodiei fără ca nimic să-l repornească.
+      const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      await stopCapture('captură nouă pe alt tab');
+      await startCapture(tab, streamId);
+      return;
+    }
     await startCapture(tab);
   } catch (err) {
     log.error('Eroare la pornirea/oprirea capturii:', err?.message || err);
@@ -103,10 +112,13 @@ async function toggleCapture(tab, reason, want = null) {
   }
 }
 
-async function startCapture(tab) {
+async function startCapture(tab, alreadyGranted = null) {
   // ORDINEA CONTEAZĂ: cerem streamId ÎNAINTE de orice alt await. getMediaStreamId are nevoie
   // de gestul utilizatorului (clickul pe iconiță), iar acesta se poate pierde peste un await.
-  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  // `alreadyGranted` vine de pe calea „captură nouă pe alt tab”, unde a fost cerut și mai
+  // devreme, tocmai ca să nu oprim captura veche înainte să știm că cea nouă poate porni.
+  const streamId = alreadyGranted
+    ?? await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
   await ensureOffscreen();
   await setCapturingTab(tab.id);
   log.info('Pornesc captura pe tab', tab.id);
