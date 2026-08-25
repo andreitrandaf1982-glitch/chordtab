@@ -346,12 +346,15 @@ try {
   const segments = () => page.locator('#chordtab-panel .ct-seg');
   const sheetRows = () => page.locator('#chordtab-panel .ct-sheet-row');
 
-  await check('Pasul 1: bara are un segment per secțiune, cu literele grupurilor', async () => {
+  await check('Pasul 1: bara are un segment per secțiune, cu numele lor (nu litere)', async () => {
     const count = await segments().count();
     assert.ok(count >= 4 && count <= 6, `aștept 4-6 segmente, am ${count}`);
-    const letters = (await segments().allTextContents()).map((s) => s.trim());
-    assert.deepEqual(letters.slice(0, 4), ['A', 'B', 'A', 'B'],
-      `literele barei: ${JSON.stringify(letters)}`);
+    const names = (await segments().allTextContents()).map((s) => s.trim());
+    assert.deepEqual(names.slice(0, 4), ['Strofă', 'Refren', 'Strofă', 'Refren'],
+      `numele din bară: ${JSON.stringify(names)}`);
+    // Literele de laborator n-au voie să mai ajungă pe ecran nicăieri în panou.
+    const panelText = await page.locator('#chordtab-panel').textContent();
+    assert.ok(!/\b[A-J]\s*·/.test(panelText), `panoul încă arată litere de grup: ${panelText}`);
   });
 
   await check('Pasul 6: foaia are un rând per secțiune, ÎN ORDINEA melodiei', async () => {
@@ -510,6 +513,46 @@ try {
     await page.waitForTimeout(300);
     const t = await page.evaluate(() => document.querySelector('video').currentTime);
     assert.ok(Math.abs(t - 15) <= 1.5, `după click sunt la ${t.toFixed(1)}s, aștept ~15s`);
+  });
+
+  // --- PASUL 0: secțiuni fără nume euristic primesc „Partea N”, nu litere ---
+  //
+  // A×4, B×2, A×2: „refrenul” apare o singură dată, deci nameSections refuză (pe bună dreptate)
+  // să ghicească strofă/refren. Înainte ieșea „Partea A” / „Partea B”; acum trebuie să iasă
+  // numere, în ordinea în care le auzi.
+  await check('Pasul 0: fără nume ghicit, secțiunile sunt „Partea 1/2”, în ordinea auzirii', async () => {
+    const PARTS_ID = 'partsVideo01';
+    const LOOP_A = [['G', 2], ['D', 2], ['Am', 2], ['C', 2]];
+    const LOOP_B = [['Em', 2], ['C', 2], ['G', 2], ['D', 2]];
+    const flat = [];
+    for (const loop of [...Array(4).fill(LOOP_A), ...Array(2).fill(LOOP_B), ...Array(2).fill(LOOP_A)]) {
+      flat.push(...loop);
+    }
+    const chords = [];
+    let t = 0, prev = null;
+    for (const [label, sec] of flat) {
+      if (label !== prev) chords.push({ t, label, confidence: 0.9 });
+      prev = label;
+      t += sec;
+    }
+    await (await liveWorker()).evaluate(async ({ id, c }) => {
+      await chrome.storage.local.set({
+        [`chords:${id}`]: { version: 1, analyzedAt: new Date().toISOString(), capo: 0, chords: c },
+      });
+    }, { id: PARTS_ID, c: chords });
+
+    await page.goto(`https://www.youtube.com/watch?v=${PARTS_ID}`);
+    await page.locator('#chordtab-panel').waitFor({ state: 'attached', timeout: 15000 });
+    await page.locator('#chordtab-panel .ct-sheet-wrap').waitFor({ state: 'visible', timeout: 10000 });
+
+    const tags = (await page.locator('#chordtab-panel .ct-sheet-tag').allTextContents())
+      .map((s) => s.trim());
+    assert.deepEqual(tags, ['Partea 1', 'Partea 2', 'Partea 1'],
+      `etichetele foii: ${JSON.stringify(tags)}`);
+    // Același grup = același număr ORIUNDE apare, chiar dacă revine mai târziu.
+    const segs = (await page.locator('#chordtab-panel .ct-seg').allTextContents()).map((s) => s.trim());
+    assert.deepEqual(segs.slice(0, 3), ['Partea 1', 'Partea 2', 'Partea 1'],
+      `numele din bară: ${JSON.stringify(segs)}`);
   });
 
   await check('Pasul 5: pe o pagină fără video, panoul nu apare deloc', async () => {

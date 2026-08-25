@@ -33,6 +33,7 @@ const state = {
   transpose: 0,       // schimbare de tonalitate cerută manual, în semitonuri
   analyzedAt: null,
   structure: null,    // rezultatul lui detectSections — doar în modul „memorat”
+  clusterOrder: new Map(), // literă de grup -> „a câta bucată distinctă” e (pentru „Partea N”)
   timeInterval: null,
   saveTimer: null,
   rafId: null,
@@ -79,7 +80,8 @@ function onNavigate() {
   stopPlayback();
   Object.assign(state, {
     videoId: newId, mode: 'idle', chords: [], capo: 0, suggestedCapo: 0,
-    transpose: 0, analyzedAt: null, structure: null, lastIndex: -1, lastSection: -1,
+    transpose: 0, analyzedAt: null, structure: null, clusterOrder: new Map(),
+    lastIndex: -1, lastSection: -1,
   });
   syncPanelPresence();
 }
@@ -377,13 +379,27 @@ function resetControls() {
 // Bara se construiește O SINGURĂ DATĂ; în bucla de redare se schimbă doar clasa segmentului
 // curent. (Lecția pâlpâitului: nu reconstrui DOM sub cursor la fiecare cadru.)
 
-/** Numele de afișat al unei secțiuni: „B · Refren”, „Partea C”, „Intro” sau „Liber”. */
+/** Numele de afișat al unei secțiuni: „Refren”, „Partea 2”, „Intro” sau „Trecere”. */
 function sectionLabel(s) {
   const name = s.name ? STR.sectionNames[s.name] : null;
-  return s.cluster ? STR.sectionLabel(s.cluster, name) : STR.freeSection(name);
+  if (!s.cluster) return STR.freeSection(name);
+  return STR.sectionLabel(state.clusterOrder.get(s.cluster) ?? 1, name);
+}
+
+// Numărul de ordine al fiecărui grup, după PRIMA APARIȚIE în melodie — nu după litera dată de
+// sections.js. Literele se atribuie în ordinea în care sunt descoperite buclele, iar pasul de
+// adopție poate lipi mai târziu un grup pe o secțiune de la începutul melodiei; atunci litera
+// n-ar mai corespunde cu ce aude omul. Ordinea din secțiuni corespunde mereu.
+function clusterOrdinals(sections) {
+  const map = new Map();
+  for (const s of sections) {
+    if (s.cluster && !map.has(s.cluster)) map.set(s.cluster, map.size + 1);
+  }
+  return map;
 }
 
 function computeStructure() {
+  state.clusterOrder = new Map();
   if (!state.chords.length) { state.structure = null; return; }
   const video = getVideo();
   const videoEnd = video && Number.isFinite(video.duration) && video.duration > 0
@@ -403,6 +419,7 @@ function computeStructure() {
 
   try {
     state.structure = detectSections(state.chords, duration);
+    state.clusterOrder = clusterOrdinals(state.structure.sections);
     const groups = Object.keys(state.structure.patterns).length;
     log.info(`Structură: ${state.structure.sections.length} secțiuni, ${groups} tipare, `
       + `acoperire ${(state.structure.coverage * 100).toFixed(0)}%`);
@@ -447,8 +464,10 @@ function buildStructure() {
     seg.dataset.index = String(i);
     if (s.cluster) seg.dataset.group = String(letters.indexOf(s.cluster) % 5);
     seg.style.flexGrow = String(Math.max(0.02, (s.end - s.start) / total));
-    seg.textContent = s.cluster || '';
     const label = sectionLabel(s);
+    // Numele întreg, nu litera: pe segmentele înguste CSS-ul îl taie cu „…”, iar titlul
+    // rămâne complet. Tot ce se vede în panou vorbește aceeași limbă.
+    seg.textContent = label;
     seg.title = STR.jumpTo(label);
     seg.setAttribute('aria-label', STR.jumpTo(label));
     seg.addEventListener('click', () => {
@@ -766,6 +785,7 @@ function startClock() {
   state.capo = 0;
   state.suggestedCapo = 0;
   state.structure = null; // structura ține de melodia memorată, nu de analiza în curs
+  state.clusterOrder = new Map();
   state.lastSection = -1;
   ui.barKey = null;       // reanaliza trebuie să reconstruiască bara, nu s-o creadă valabilă
   ui.sheetKey = null;

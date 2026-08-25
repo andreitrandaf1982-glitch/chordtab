@@ -32,8 +32,12 @@ export const STR = {
     bridge: 'Punte',
     outro: 'Final',
   },
-  sectionLabel: (letter, name) => (name ? `${letter} · ${name}` : `Partea ${letter}`),
-  freeSection: (name) => name || 'Liber',
+  // Numele secțiunilor sunt pentru OM, nu pentru algoritm: „A · Refren” și „Partea C” erau
+  // limbaj de laborator („aia cu A liber, B CD, redenumește cumva” — Andrei). Litera rămâne
+  // doar în interior, ca cheie și ca sursă de culoare. Numărul e ordinea primei apariții în
+  // melodie, deci „Partea 2” e a doua bucată distinctă pe care o auzi.
+  sectionLabel: (ordinal, name) => name || `Partea ${ordinal}`,
+  freeSection: (name) => name || 'Trecere',
   jumpTo: (label) => `Sari la ${label}`,
   times: (n) => `×${n}`,
   upNextSection: (label) => `urmează: ${label}`,
