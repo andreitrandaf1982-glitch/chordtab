@@ -48,6 +48,7 @@ const state = {
   practice: null,     // { index, start, end, label, prevRate } — secțiunea pusă pe repetat
   practiceRate: 1,    // viteza aleasă pentru exersare (ține între secțiuni)
   clockVideo: null,   // elementul <video> pe care ascultăm „ended” cât timp analizăm
+  lastClockT: 0,      // ultimul timp trimis prin CT_TIME (ca să prindem reluarea buclei)
   timeInterval: null,
   saveTimer: null,
   rafId: null,
@@ -1104,7 +1105,12 @@ function onActionClick() {
 // la nesfârșit în Pasul 1: acordurile treceau, dar banda și secțiunile nu apăreau niciodată,
 // fiindcă nimeni nu-i spusese că trebuie să apese „Oprește”. Ăsta era defectul de fond.
 function onVideoEnded() {
-  if (state.mode !== 'listening') return;
+  // Reclamele rulează în ACELAȘI <video>, deci la capătul lor firesc elementul emite tot
+  // „ended”. Fără garda asta, un pre-roll „termina” analiza cu zero acorduri (butonul părea
+  // mort), iar un mid-roll salva jumătate de melodie și o prezenta drept învățată.
+  // Asumat: dacă un post-roll pornește exact în clipa în care se termină melodia, ratăm
+  // oprirea automată și omul apasă „Oprește” — degradare acceptabilă; opusul nu era.
+  if (state.mode !== 'listening' || isAdShowing()) return;
   log.info('Melodia s-a terminat — închei analiza singur.');
   chrome.runtime.sendMessage({ target: 'background', type: 'REQUEST_STOP' }).catch(() => {});
   // Trecem local în Pasul 2 fără să așteptăm confirmarea: dacă service workerul a fost
@@ -1163,10 +1169,24 @@ function startClock() {
   ui.stripKey = null;
   state.clockVideo = getVideo();
   state.clockVideo?.addEventListener('ended', onVideoEnded);
+  state.lastClockT = 0;
   clearInterval(state.timeInterval);
   state.timeInterval = setInterval(() => {
     const video = getVideo();
     if (!video || video.paused || isAdShowing()) return; // fără ceas => analizorul aruncă cadrele
+    // Cu bucla nativă a YouTube (click-dreapta pe player → repetare) evenimentul „ended” NU
+    // se emite NICIODATĂ: spec-ul HTML sare la început fără niciun eveniment. Fără asta,
+    // panoul rămânea veșnic în Pasul 1, iar la reluare acordurile cu t≈0 ștergeau, prin
+    // curățarea de după derulare, toată cronologia primei treceri — și o salvau peste
+    // memoria bună. Reluarea buclei E finalul melodiei.
+    // Asumat: cu Loop pornit, o derulare manuală înapoi la început e indistinctibilă de
+    // wrap și încheie analiza cu ce s-a strâns; mai bine decât să pierdem tot.
+    if (video.loop && state.lastClockT > 5 && video.currentTime < 1.5
+        && video.currentTime < state.lastClockT - 5) {
+      onVideoEnded();
+      return;
+    }
+    state.lastClockT = video.currentTime;
     chrome.runtime.sendMessage({
       target: 'offscreen',
       type: 'CT_TIME',

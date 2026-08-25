@@ -476,6 +476,102 @@ try {
     assert.match(status, /memorate/i, `după finalul melodiei aștept modul memorat, am „${status}”`);
   });
 
+  // --- AUDIT 2: „ended” al RECLAMEI nu are voie să încheie analiza ---
+  //
+  // Reclamele rulează în același <video>, deci la capătul lor firesc elementul emite tot
+  // „ended”. Pre-roll => analiza „se termina” cu zero acorduri; mid-roll => jumătate de
+  // melodie prezentată drept învățată.
+  await check('„ended" în timpul unei reclame NU oprește analiza', async () => {
+    const startListening = async (chords) => {
+      await (await liveWorker()).evaluate(async ({ videoId, c }) => {
+        const tabs = await chrome.tabs.query({});
+        const send = async (m) => {
+          for (const t of tabs) { try { await chrome.tabs.sendMessage(t.id, m); } catch { /* alt tab */ } }
+        };
+        await send({ target: 'content', type: 'CAPTURE_STATE', capturing: true });
+        for (const x of c) await send({ target: 'content', type: 'CHORD_EVENT', videoId, ...x });
+      }, { videoId: VIDEO_ID, c: chords });
+      await page.waitForFunction(
+        () => /Pasul 1 din 2/.test(document.querySelector('#chordtab-panel .ct-step')?.textContent || ''),
+        null, { timeout: 10000 });
+    };
+
+    await startListening([
+      { t: 0, label: 'D', confidence: 0.8 },
+      { t: 3, label: 'A', confidence: 0.8 },
+      { t: 6, label: 'Bm', confidence: 0.8 },
+    ]);
+
+    // Playerul marchează reclama exact cum o face YouTube.
+    await page.evaluate(() => {
+      document.querySelector('.html5-video-player').classList.add('ad-showing');
+      document.querySelector('video').dispatchEvent(new Event('ended'));
+    });
+    await page.waitForTimeout(700);
+    const step = await page.locator('#chordtab-panel .ct-step').textContent();
+    assert.match(step, /Pasul 1 din 2/,
+      `reclama a încheiat analiza — panoul arată „${step}"`);
+
+    // Reclama se termină, melodia se termină cu adevărat: ACUM trebuie să treacă.
+    await page.evaluate(() => {
+      document.querySelector('.html5-video-player').classList.remove('ad-showing');
+      document.querySelector('video').dispatchEvent(new Event('ended'));
+    });
+    await page.waitForFunction(
+      () => /Pasul 2 din 2/.test(document.querySelector('#chordtab-panel .ct-step')?.textContent || ''),
+      null, { timeout: 10000 });
+  });
+
+  // --- AUDIT 2: bucla nativă YouTube nu emite „ended” niciodată ---
+  await check('Cu Loop pornit, reluarea melodiei încheie analiza (fără să piardă acordurile)', async () => {
+    await (await liveWorker()).evaluate(async ({ videoId, c }) => {
+      const tabs = await chrome.tabs.query({});
+      const send = async (m) => {
+        for (const t of tabs) { try { await chrome.tabs.sendMessage(t.id, m); } catch { /* alt tab */ } }
+      };
+      await send({ target: 'content', type: 'CAPTURE_STATE', capturing: true });
+      for (const x of c) await send({ target: 'content', type: 'CHORD_EVENT', videoId, ...x });
+    }, {
+      videoId: VIDEO_ID,
+      c: [
+        { t: 0, label: 'F', confidence: 0.8 },
+        { t: 4, label: 'C', confidence: 0.8 },
+        { t: 8, label: 'Dm', confidence: 0.8 },
+        { t: 12, label: 'Bb', confidence: 0.8 },
+      ],
+    });
+    await page.waitForFunction(
+      () => /Pasul 1 din 2/.test(document.querySelector('#chordtab-panel .ct-step')?.textContent || ''),
+      null, { timeout: 10000 });
+
+    // Loop pornit, melodia ajunge târziu… apoi sare la început FĂRĂ să emită „ended”.
+    // Melodia trebuie să RULEZE: ceasul care prinde reluarea nu bate pe pauză (și nici
+    // n-ar trebui — un video oprit nu se buclează).
+    await page.evaluate(async () => {
+      const v = document.querySelector('video');
+      v.loop = true;
+      v.muted = true;
+      v.currentTime = 60;
+      try { await v.play(); } catch { /* verificarea de mai jos spune dacă n-a pornit */ }
+    });
+    await page.waitForTimeout(700);   // ceasul de 250ms apucă să vadă t-ul mare
+    await page.evaluate(() => { document.querySelector('video').currentTime = 0.3; });
+
+    await page.waitForFunction(
+      () => /Pasul 2 din 2/.test(document.querySelector('#chordtab-panel .ct-step')?.textContent || ''),
+      null, { timeout: 10000 });
+    // …și acordurile primei treceri au supraviețuit, nu s-au șters la reluare.
+    const saved = await (await liveWorker()).evaluate(
+      async (id) => (await chrome.storage.local.get(`chords:${id}`))[`chords:${id}`], VIDEO_ID);
+    assert.deepEqual(saved.chords.map((c) => c.label), ['F', 'C', 'Dm', 'Bb'],
+      `memoria după buclă: ${JSON.stringify(saved.chords.map((c) => c.label))}`);
+    await page.evaluate(() => {
+      const v = document.querySelector('video');
+      v.loop = false;
+      v.pause();
+    });
+  });
+
   // --- PAȘII 1-2: structura melodiei (bara + legenda + secțiunea curentă) ---
   //
   // Cronologie cu structură limpede: A A A A B B A A B B, buclă de 8 s.
