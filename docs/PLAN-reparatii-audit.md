@@ -1,4 +1,4 @@
-# PLAN — Reparațiile auditului adversarial (v0.2.0 → v0.2.1)
+# PLAN — Reparațiile auditului + Foaia melodiei (v0.2.0 → v0.3.0)
 
 > Audit rulat pe Fable, 2026-08-24: 4 auditori pe dimensiuni independente + câte un sceptic
 > pus să INFIRME fiecare constatare (14 agenți). 10 constatări verificate, 10 confirmate,
@@ -117,10 +117,72 @@ idempotență `...|sections.length` nu vede conținutul; handler-ele de click ț
 **POARTĂ 5:** teste UI noi pentru 5a (pagină fără v= → fără panou) și 5c (structură schimbată
 cu același număr de secțiuni → bara se reconstruiește). Suita verde.
 
-## Pasul 6 — ambalare v0.2.1
+## Pasul 6 — FOAIA MELODIEI (funcție nouă, proiectată de Fable la cererea lui Andrei)
 
-Versiune 0.2.1 în manifest + package.json, `npm run test:package`, commit, push.
-**POARTĂ 6:** tot verde, arhiva nouă construită cu tar și verificată la nume de intrări.
+**Problema, în cuvintele lui:** „văd mereu pe ecran doar patru acorduri… n-am ceva istoric să
+văd melodia sau să derulez înainte-înapoi pe bucăți." Legenda arată *tiparele* (dedublate),
+dar nu arată *melodia*. Foaia e partitura întreagă, în ordinea cântecului, pe care poți da click.
+
+**Design (mod „memorat”; live rămâne cum e):**
+
+```
+STRUCTURA    [bara existentă — neschimbată]
+FOAIA MELODIEI
+  ▶ A · Strofă   [G][D][Am][C]        ×4     ← rând per SECȚIUNE, ÎN ORDINEA MELODIEI
+    B · Refren   [Em][C][G][D]        ×2        (nu dedublat ca legenda!)
+    A · Strofă   [G][D][Am][C]        ×2
+    B · Refren   [Em][C][G][D]        ×2
+    C · Punte    [F][F#m]
+    B · Refren   [Em][C][G][D]        ×2
+```
+
+**Foaia ÎNLOCUIEȘTE legenda** (informația ei — tipar + ×total — e cuprinsă în rânduri; primele
+apariții ale fiecărui grup o acoperă). Elementul `.ct-legend` devine `.ct-sheet`; testele
+existente de legendă se rescriu pe foaie (tiparul per rând + ×reps rămân verificate).
+
+Reguli exacte:
+1. **Un rând per element din `st.sections`, în ordine.** Eticheta rândului = `sectionLabel(s)`
+   cu aceleași culori `data-group` ca bara. Click pe etichetă = salt la `s.start + 0.05`.
+2. **Chip-urile rândului:**
+   - secțiune cu grup: `st.patterns[s.cluster].loop`, prin `displayLabel()` (capo/ton se
+     aplică); click pe chip-ul k = salt la `s.start + Σ(loop[j].seconds, j<k) + 0.05`
+     (prima trecere prin buclă). `×s.reps` la capătul rândului (fără × la reps=1).
+   - secțiune liberă (punte/intro/final): felia reală din `state.chords` cu
+     `s.start <= t < s.end`, dedublată pe etichete consecutive; click pe chip = salt la
+     `max(chord.t, s.start) + 0.05`. Ține `t`-ul fiecărui chip în `dataset.t`.
+   - hover pe orice chip = diagrama lui (`attachChipHover`, exact ca peste tot).
+3. **Evidențierea „aici ești”:** rândul curent primește `is-current`; ÎN rândul curent,
+   chip-ul acordului care sună primește `is-now`. Calcul: pentru rând cu grup, faza
+   `p = (t - s.start) % st.patterns[cluster].period`, apoi mers cumulativ prin
+   `loop[].seconds` până îl conține pe p; pentru rând liber, ultimul chip cu
+   `dataset.t <= t`. LECȚIA PÂLPÂITULUI: bucla rAF NU reconstruiește DOM; extinde garda
+   existentă din tick cu o cheie `sheetKey = sectionIdx|chordIdx` și scrie clase DOAR când
+   cheia se schimbă (~o dată la 2 s). La schimbarea rândului curent:
+   `row.scrollIntoView({ block: 'nearest' })`.
+4. **Fără structură, foaia TOT apare** — plângerea lui Andrei e valabilă și acolo. Decuplează:
+   bara+numele cer `hasUsefulStructure()`; foaia cere doar `state.chords.length >= 4` în
+   playback. Fallback: un singur rând fără etichetă, cu TOATE acordurile memorate ca chip-uri
+   (dedublate consecutiv, click = salt la `t`), împachetate pe mai multe linii.
+5. **Gabarit:** `.ct-sheet { max-height: 300px; overflow-y: auto; }` — melodiile lungi se
+   derulează în interiorul foii, panoul nu crește la nesfârșit.
+6. **Reconstrucție:** aceeași cheie ca bara (după fixul 5c include conținutul secțiunilor) +
+   capo/ton; zero reconstrucții din bucla rAF.
+7. Texte noi în `strings.js`: `sheet: 'Foaia melodiei'` (+ ce mai e nevoie). Captură nouă în
+   `tools/screenshot.mjs` (înlocuiește-o pe cea de structură ca să arate și foaia), README
+   actualizat la secțiunea de structură.
+
+**POARTĂ 6 (teste UI noi, pe cronologia structurată existentă):** foaia are exact câte un rând
+per secțiune, în ordinea A B A B (nu dedublat); click pe chip-ul 2 din rândul 2 duce
+currentTime la ~32+2s (±1); după seek în rândul 2, rândul 2 e `is-current` și chip-ul corect
+e `is-now`; pe cronologia FĂRĂ structură foaia apare cu toate acordurile și click pe un chip
+sare la timpul lui; observatorul de mutații pe foaie, cu redarea pe pauză 1,5 s → ≤2 modificări.
+Testele vechi de legendă rescrise pe foaie; toată suita verde.
+
+## Pasul 7 — ambalare v0.3.0
+
+Versiune 0.3.0 în manifest + package.json (funcție nouă, nu doar reparații),
+`npm run test:package`, commit, push.
+**POARTĂ 7:** tot verde, arhiva nouă construită cu tar și verificată la nume de intrări.
 
 ## Backlog asumat (minore neverificate — NU se repară acum; decizie Andrei mai târziu)
 
