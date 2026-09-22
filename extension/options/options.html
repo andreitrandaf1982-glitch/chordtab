@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <title>ChordTab — opțiuni</title>
+  <style>
+    /* aceeași hârtie și același albastru de brand ca panoul și Caietul meu */
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f6f1e4; color: #1e223d; padding: 24px; max-width: 480px; }
+    h1 { color: #3058f0; font-size: 20px; }
+    a { color: #3058f0; font-weight: 600; }
+    label { display: flex; align-items: center; gap: 8px; margin: 16px 0; }
+    button { background: #3058f0; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+    button:hover { background: #4f74ff; }
+    #status { font-size: 13px; opacity: 0.7; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <p><a id="notebook" href="../caiet/caiet.html" target="_blank">Caietul meu — melodiile învățate</a></p>
+  <h1>ChordTab — opțiuni</h1>
+  <label>
+    <input type="checkbox" id="debug">
+    Debug logging (mesaje detaliate în consolă)
+  </label>
+  <button id="clear-cache">Golește cache-ul de acorduri</button>
+  <div id="status"></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

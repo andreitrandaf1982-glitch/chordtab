@@ -1,0 +1,223 @@
+/* Caietul meu — aceeași hârtie, aceleași fonturi și chenare ca panoul (content/panel.css),
+   dar pe o pagină întreagă: caietul deschis pe masă, cu spirala în stânga. */
+
+@font-face {
+  font-family: "CT Playpen";
+  font-style: normal;
+  font-weight: 100 800;
+  src: url("../fonts/playpen-sans.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "CT Playwrite";
+  font-style: normal;
+  font-weight: 100 400;
+  src: url("../fonts/playwrite-ro.woff2") format("woff2");
+}
+
+:root {
+  --paper: #f6f1e4;
+  --paper-2: #efe8d6;
+  --ink: #1e223d;
+  --ink-soft: rgba(30, 34, 61, 0.62);
+  --rule: rgba(30, 34, 61, 0.10);
+  --blue: #3058f0;
+  --blue-dark: #1e3ab0;
+  --teal: #1f8f87;
+  --orange: #f54f1b;
+  --pencil: #d64545;
+  --hand: "CT Playwrite", "Playwrite RO", "Segoe Script", cursive;
+  --print: "CT Playpen", "Playpen Sans", "Segoe Print", sans-serif;
+  --wobble-a: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  --wobble-b: 15px 225px 15px 255px / 255px 15px 225px 15px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #15171c;
+  font-family: var(--print);
+  font-size: 15px;
+  color: var(--ink);
+  display: flex;
+  justify-content: center;
+  padding: 36px 16px 60px;
+}
+
+/* pagina de caiet */
+.cb-page {
+  position: relative;
+  width: min(920px, 100%);
+  padding: 40px 48px 36px 76px;
+  background:
+    repeating-linear-gradient(transparent 0 31px, var(--rule) 31px 32px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 0 0.05 0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    var(--paper);
+  border-radius: 6px 12px 10px 8px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+/* marginea roșie + găurile spiralei */
+.cb-page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 58px;
+  width: 1.5px;
+  background: rgba(214, 69, 69, 0.45);
+}
+
+.cb-page::after {
+  content: "";
+  position: absolute;
+  top: 28px;
+  bottom: 28px;
+  left: 18px;
+  width: 16px;
+  background: radial-gradient(circle at 50% 50%, #15171c 0 5px, rgba(0, 0, 0, 0.25) 5.5px 6.5px, transparent 7px) 0 0 / 16px 44px repeat-y;
+  pointer-events: none;
+}
+
+.cb-head { margin-bottom: 18px; }
+
+.cb-title {
+  margin: 0;
+  font-family: var(--hand);
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.15;
+  color: var(--blue);
+}
+
+.cb-sub {
+  margin: 4px 0 0;
+  font-family: var(--hand);
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--teal);
+}
+
+.cb-empty {
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 14px 16px;
+  margin: 12px 0;
+  background: #fff6c4;
+  border: 1px solid rgba(30, 34, 61, 0.14);
+  border-radius: 3px 6px 4px 7px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+  transform: rotate(-0.4deg);
+}
+
+.cb-empty[hidden] { display: none; }
+
+/* --- un rând = o melodie --- */
+
+.cb-list { display: flex; flex-direction: column; gap: 10px; }
+
+.cb-song {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  padding: 10px 12px 12px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+}
+
+.cb-song:hover { background: rgba(48, 88, 240, 0.05); border-left-color: var(--pencil); }
+
+.cb-song-title {
+  grid-column: 1;
+  margin: 0;
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.25;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cb-song-title:hover { color: var(--blue); }
+
+.cb-song-meta {
+  grid-column: 1;
+  font-family: var(--hand);
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--ink-soft);
+}
+
+.cb-chips {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.cb-chip {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 10px 5px;
+  background: var(--paper-2);
+  border: 1.6px solid var(--ink);
+  border-radius: var(--wobble-a);
+}
+
+.cb-chip:nth-child(even) { border-radius: var(--wobble-b); }
+
+.cb-actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.cb-btn {
+  font-family: var(--print);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink);
+  background: transparent;
+  border: 1.6px solid var(--ink);
+  border-radius: var(--wobble-a);
+  padding: 6px 11px 7px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cb-btn:nth-child(even) { border-radius: var(--wobble-b); }
+.cb-btn:hover { background: var(--paper-2); }
+
+.cb-btn.is-primary {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue-dark);
+  box-shadow: 1.5px 1.5px 0 var(--blue-dark);
+}
+
+.cb-btn.is-primary:hover { background: #4f74ff; }
+
+.cb-btn.is-danger { color: var(--pencil); border-color: var(--pencil); opacity: 0.7; }
+.cb-btn.is-danger:hover { opacity: 1; background: rgba(214, 69, 69, 0.08); }
+
+.cb-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 26px;
+  padding-top: 10px;
+  border-top: 1.5px solid rgba(30, 34, 61, 0.22);
+}
+
+.cb-brand { font-weight: 800; font-size: 18px; color: var(--blue); }
+.cb-foot-text { flex: 1; font-size: 13.5px; color: var(--ink-soft); }
+.cb-clear { align-self: center; }
+.cb-clear[hidden] { display: none; }

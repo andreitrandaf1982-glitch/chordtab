@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <title>Caietul meu — ChordTab</title>
+  <link rel="stylesheet" href="caiet.css">
+</head>
+<body>
+  <!-- Caietul meu: cuprinsul melodiilor învățate. Se umple din chrome.storage.local (chords:*)
+       de caiet.js — nimic nu vine de pe rețea. -->
+  <main class="cb-page" id="caiet">
+    <header class="cb-head">
+      <h1 class="cb-title" id="title">Caietul meu</h1>
+      <p class="cb-sub" id="subtitle"></p>
+    </header>
+    <section class="cb-list" id="list" aria-live="polite"></section>
+    <p class="cb-empty" id="empty" hidden></p>
+    <footer class="cb-foot">
+      <span class="cb-brand">ChordTab</span>
+      <span class="cb-foot-text" id="foot"></span>
+      <button class="cb-btn is-danger cb-clear" id="clear" type="button" hidden></button>
+    </footer>
+  </main>
+  <script type="module" src="caiet.js"></script>
+</body>
+</html>

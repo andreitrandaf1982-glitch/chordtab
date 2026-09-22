@@ -1,0 +1,707 @@
+/* Panoul ChordTab — tema „Caiet de cântece” (v0.6.0, cerută de Andrei: „fără discuție”).
+   Hârtie crem cu liniile caietului, bandă de scotch, titluri scrise de mână, acorduri în
+   cutiuțe trase cu creionul, diagrama desenată direct pe hârtie. Tema întunecată (v0.5.x)
+   rămâne în istoricul git dacă e nevoie de ea. Toate clasele au prefix .ct- ca să nu se
+   ciocnească de stilurile YouTube.
+
+   FONTURI — alese pentru diacriticele românești (Ș Ț Â Ă Î cu virgulă, nu sedilă):
+   Caveat și Patrick Hand N-AU ș/ț cu virgulă (U+0219/U+021B) și Chrome le împrumuta din alt
+   font — „arată ca din alte filme” (Andrei, 21.09.2026). Cele două de acum le au pe toate:
+     · Playwrite RO — modelul de scris cursiv predat în școlile din România; doar pentru
+       titlurile scrise de mână (Strofă, Refren, Capo…). Are greutăți 100–400: NU-i cere 700,
+       browserul ar îngroșa artificial.
+     · Playpen Sans — scris de copil, litere de tipar, foarte lizibil: acorduri, texte, butoane.
+   Ambele sunt subsetate (latină + română + simbolurile din panou) și INCLUSE în extensie
+   (fonts/*.woff2, licență OFL în fonts/OFL-*.txt). Nimic nu se descarcă de nicăieri.
+   `__MSG_@@extension_id__` e înlocuit de Chrome în CSS-ul de content script. */
+
+@font-face {
+  font-family: "CT Playpen";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("chrome-extension://__MSG_@@extension_id__/fonts/playpen-sans.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "CT Playwrite";
+  font-style: normal;
+  font-weight: 100 400;
+  font-display: swap;
+  src: url("chrome-extension://__MSG_@@extension_id__/fonts/playwrite-ro.woff2") format("woff2");
+}
+
+#chordtab-panel {
+  --ct-paper: #f6f1e4;        /* hârtia caietului */
+  --ct-paper-2: #efe8d6;      /* hârtie mai umbrită (chip-uri, casete) */
+  --ct-ink: #1e223d;          /* cerneala (midnight, din brandul Not a Coder) */
+  --ct-ink-soft: rgba(30, 34, 61, 0.62);
+  --ct-rule: rgba(30, 34, 61, 0.10); /* liniile caietului */
+  --ct-blue: #3058f0;         /* albastrul de brand */
+  --ct-blue-dark: #1e3ab0;
+  --ct-teal: #1f8f87;         /* scrisul de mână */
+  --ct-orange: #f54f1b;       /* abțibildurile */
+  --ct-pencil: #d64545;       /* creionul roșu: linia „acum” */
+  --ct-hand: "CT Playwrite", "Playwrite RO", "Segoe Script", cursive;
+  --ct-print: "CT Playpen", "Playpen Sans", "Segoe Print", sans-serif;
+  /* culorile grupurilor = evidențiatoare (marker) pe hârtie; textul rămâne cerneală */
+  --ct-g0: rgba(48, 88, 240, 0.22);
+  --ct-g1: rgba(122, 79, 240, 0.24);
+  --ct-g2: rgba(31, 143, 135, 0.26);
+  --ct-g3: rgba(245, 79, 27, 0.22);
+  --ct-g4: rgba(86, 150, 58, 0.24);
+  /* chenar „tras cu creionul”: raze inegale, ca o linie care nu iese perfect dreaptă;
+     cele două variante se alternează pe elementele pare/impare ca să nu pară ștanțate */
+  --ct-wobble-a: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  --ct-wobble-b: 15px 225px 15px 255px / 255px 15px 225px 15px;
+
+  position: relative;
+  margin: 14px 0;
+  padding: 18px 22px 18px;
+  color: var(--ct-ink);
+  background:
+    repeating-linear-gradient(transparent 0 27px, var(--ct-rule) 27px 28px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 0 0.05 0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    var(--ct-paper);
+  background-attachment: local, local, local;
+  border: 1px solid rgba(30, 34, 61, 0.18);
+  border-radius: 6px 10px 8px 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  font-family: var(--ct-print);
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+
+/* banda de scotch portocalie, din colțul stâng */
+#chordtab-panel::before {
+  content: "";
+  position: absolute;
+  top: -11px;
+  left: 30px;
+  width: 118px;
+  height: 26px;
+  transform: rotate(-3deg);
+  background: repeating-linear-gradient(90deg, rgba(245, 79, 27, 0.78) 0 6px, rgba(245, 79, 27, 0.66) 6px 12px);
+  opacity: 0.85;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+/* și una teal, în dreapta */
+#chordtab-panel::after {
+  content: "";
+  position: absolute;
+  top: -9px;
+  right: 46px;
+  width: 92px;
+  height: 22px;
+  transform: rotate(2.5deg);
+  background: repeating-linear-gradient(90deg, rgba(31, 143, 135, 0.7) 0 6px, rgba(31, 143, 135, 0.58) 6px 12px);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+#chordtab-panel.ct-overlay {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  width: 320px;
+}
+
+/* filtrul SVG „linie tremurată” (definit în panou de content.js) — nu ocupă loc */
+.ct-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* --- antet --- */
+
+.ct-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ct-title {
+  font-family: var(--ct-print);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ct-blue);
+  letter-spacing: 0.01em;
+}
+
+.ct-status {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 15px;
+  color: var(--ct-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ct-status.is-warning { color: var(--ct-orange); }
+
+/* Caietul meu: o iconiță-caiet „măricică” cu coperta portocalie (Andrei: „un ecran
+   portocaliu, sau cel puțin la hover”), eticheta scrisă de mână, chenar tras cu creionul
+   care se umple cu portocaliu la hover. */
+.ct-notebook {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 12px 3px 4px;
+  background: rgba(245, 79, 27, 0.10);
+  border: 1.6px solid var(--ct-orange);
+  border-radius: var(--ct-wobble-b);
+  cursor: pointer;
+  color: var(--ct-orange);
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1;
+  transform: rotate(-0.8deg);
+  transition: background-color 120ms linear, color 120ms linear;
+}
+
+.ct-notebook svg { display: block; transform: rotate(-4deg); transition: transform 120ms ease; }
+.ct-notebook:hover { background: var(--ct-orange); color: #fff; box-shadow: 1.5px 1.5px 0 #b8360c; }
+.ct-notebook:hover svg { transform: rotate(0deg) scale(1.08); }
+
+/* butoane-abțibild: umplute, cu chenar tras cu creionul */
+.ct-action,
+.ct-guide-toggle {
+  font-family: var(--ct-print);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  padding: 7px 14px 8px;
+  border: 1.6px solid var(--ct-ink);
+  border-radius: var(--ct-wobble-a);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 1.5px 1.5px 0 var(--ct-ink);
+  transform: rotate(-0.6deg);
+}
+
+.ct-action { background: var(--ct-blue); color: #fff; border-color: var(--ct-blue-dark); box-shadow: 1.5px 1.5px 0 var(--ct-blue-dark); }
+.ct-action:hover { background: #4f74ff; }
+
+.ct-guide-toggle { background: var(--ct-orange); color: #fff; border-color: #b8360c; box-shadow: 1.5px 1.5px 0 #b8360c; transform: rotate(1deg); }
+.ct-guide-toggle:hover, .ct-guide-toggle.is-open { background: #ff7043; }
+
+/* --- ghidul: o notiță lipită pe caiet --- */
+
+.ct-guide {
+  position: relative;
+  margin: 6px 0 12px;
+  padding: 14px 18px 12px;
+  background: #fff6c4;
+  border: 1px solid rgba(30, 34, 61, 0.14);
+  border-radius: 3px 6px 4px 7px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+  transform: rotate(-0.4deg);
+  font-family: var(--ct-print);
+  font-size: 14.5px;
+}
+
+.ct-guide[hidden] { display: none; }
+
+.ct-guide-title {
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 25px;
+  line-height: 1.15;
+  color: var(--ct-orange);
+  margin-bottom: 8px;
+}
+
+.ct-guide-item { line-height: 1.45; margin-bottom: 6px; }
+.ct-guide-item-title { font-weight: 700; color: var(--ct-teal); }
+.ct-guide-item-title::after { content: " — "; }
+.ct-guide-item-body { color: var(--ct-ink); }
+
+.ct-guide-privacy {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(30, 34, 61, 0.3);
+  color: var(--ct-ink-soft);
+  font-size: 13.5px;
+}
+
+.ct-guide-done { margin-top: 10px; }
+
+/* Linia „Pasul N din 2” — o notă cu creionul, cu margine portocalie cât timp e ceva de aflat */
+.ct-step {
+  font-family: var(--ct-print);
+  font-size: 14.5px;
+  line-height: 1.4;
+  padding: 6px 12px;
+  margin-bottom: 4px;
+  border-left: 3px solid var(--ct-orange);
+  color: var(--ct-ink);
+  background: rgba(245, 79, 27, 0.07);
+}
+
+.ct-step[data-mode="playback"] {
+  border-left-color: rgba(30, 34, 61, 0.25);
+  background: transparent;
+  color: var(--ct-ink-soft);
+}
+
+/* Clickul pe „Pornește din iconița ↑” pulsează linia pasului, ca ochiul să cadă pe ea. */
+.ct-step.is-pulse { animation: ct-pulse 1.2s ease-out 2; }
+
+@keyframes ct-pulse {
+  0% { background: rgba(245, 79, 27, 0.07); }
+  30% { background: rgba(245, 79, 27, 0.32); }
+  100% { background: rgba(245, 79, 27, 0.07); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-step.is-pulse { animation: none; background: rgba(245, 79, 27, 0.25); }
+}
+
+/* --- acordul curent + ce urmează --- */
+
+.ct-now {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 6px 0 12px;
+  border-bottom: 1.5px solid rgba(30, 34, 61, 0.22);
+  flex-wrap: wrap;
+}
+
+.ct-chord-block { display: flex; align-items: center; gap: 18px; }
+
+.ct-current {
+  font-family: var(--ct-print);
+  font-weight: 800;
+  font-size: 66px;
+  line-height: 1;
+  min-width: 1.7em;
+  color: var(--ct-ink);
+  cursor: default;
+}
+
+/* Diagrama: desenată direct pe hârtie, fără cartonaș; DIMENSIUNE FIXĂ, plină sau goală —
+   altfel apariția ei mută panoul, cursorul iese de pe acord, diagrama revine, panoul se mută
+   la loc (pâlpâitul din v0.1). Nu scoate width/height de aici. */
+.ct-diagram-slot {
+  box-sizing: border-box;
+  width: 120px;
+  height: 138px;
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  line-height: 0;
+  background: transparent;
+}
+
+.ct-diagram { display: block; width: 108px; height: auto; filter: url(#ct-rough); }
+
+.ct-chip.ct-has-diagram { cursor: help; }
+
+.ct-next { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.ct-next-label {
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--ct-ink-soft);
+}
+
+.ct-next-list { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* chip = cutiuță trasă cu creionul */
+.ct-chip {
+  font-family: var(--ct-print);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1;
+  padding: 5px 11px 6px;
+  color: var(--ct-ink);
+  background: var(--ct-paper-2);
+  border: 1.6px solid var(--ct-ink);
+  border-radius: var(--ct-wobble-a);
+}
+
+.ct-chip:nth-child(even) { border-radius: var(--ct-wobble-b); }
+
+/* --- banda rulantă: cartonașele curg pe o linie a caietului --- */
+
+.ct-strip-wrap {
+  padding: 10px 0 2px;
+  border-bottom: 1.5px solid rgba(30, 34, 61, 0.22);
+}
+
+.ct-strip-wrap[hidden] { display: none; }
+
+.ct-strip-view {
+  position: relative;
+  overflow: hidden;
+  height: 62px;
+  /* Capetele se topesc, ca acordurile să nu apară și să dispară brusc pe margini. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+}
+
+/* `margin-left: 25%` face ca translateX(-t·px) să aducă momentul t exact sub linia „acum”.
+   Fără el ar trebui să citim lățimea vizibilă la fiecare cadru — recalcul de layout la
+   60 fps, exact ce nu vrem. Nu-l scoate. */
+.ct-strip { position: relative; height: 100%; margin-left: 25%; will-change: transform; }
+
+.ct-strip-chip {
+  position: absolute;
+  top: 2px;
+  height: 38px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ct-print);
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1;
+  color: var(--ct-ink);
+  background: var(--ct-paper-2);
+  border: 1.6px solid var(--ct-ink);
+  border-radius: var(--ct-wobble-a);
+  padding: 0 2px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: background-color 90ms linear;
+}
+
+.ct-strip-chip:nth-child(even) { border-radius: var(--ct-wobble-b); }
+.ct-strip-chip:hover { background: #e6dfc9; }
+
+.ct-strip-chip.is-now {
+  background: var(--ct-blue);
+  border-color: var(--ct-blue-dark);
+  color: #fff;
+  box-shadow: 1.5px 1.5px 0 var(--ct-blue-dark);
+}
+
+/* banda secțiunii: o dungă de evidențiator sub cartonașe */
+.ct-strip-band {
+  position: absolute;
+  bottom: 0;
+  height: 17px;
+  box-sizing: border-box;
+  border-radius: 3px 6px 4px 7px;
+  background: rgba(30, 34, 61, 0.10);
+  color: var(--ct-ink);
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 13.5px;
+  line-height: 17px;
+  padding: 0 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.ct-strip-band[data-group="0"] { background: var(--ct-g0); }
+.ct-strip-band[data-group="1"] { background: var(--ct-g1); }
+.ct-strip-band[data-group="2"] { background: var(--ct-g2); }
+.ct-strip-band[data-group="3"] { background: var(--ct-g3); }
+.ct-strip-band[data-group="4"] { background: var(--ct-g4); }
+
+/* linia „acum”: creion roșu, un pic strâmb */
+.ct-strip-line {
+  position: absolute;
+  left: 25%;
+  top: 0;
+  bottom: 0;
+  width: 2.5px;
+  margin-left: -1px;
+  background: var(--ct-pencil);
+  opacity: 0.9;
+  transform: rotate(1.2deg);
+  pointer-events: none;
+}
+
+/* --- structura: segmente de evidențiator --- */
+
+.ct-structure {
+  padding: 10px 0 2px;
+  border-bottom: 1.5px solid rgba(30, 34, 61, 0.22);
+}
+
+.ct-structure[hidden] { display: none; }
+
+.ct-bar {
+  display: flex;
+  gap: 3px;
+  height: 25px;
+  margin: 6px 0 10px;
+  filter: url(#ct-rough);
+}
+
+.ct-seg {
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 6px;
+  border: 0;
+  border-radius: 3px 8px 4px 9px;
+  background: rgba(30, 34, 61, 0.10);
+  color: var(--ct-ink);
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 25px;
+  padding: 0 7px;
+  cursor: pointer;
+  /* Segmentele scurte n-au loc pentru numele întreg — îl tăiem curat, cu „…”.
+     Numele complet rămâne în tooltip. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.75;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: opacity 120ms linear, outline-color 120ms linear;
+}
+
+.ct-seg[data-group="0"] { background: var(--ct-g0); }
+.ct-seg[data-group="1"] { background: var(--ct-g1); }
+.ct-seg[data-group="2"] { background: var(--ct-g2); }
+.ct-seg[data-group="3"] { background: var(--ct-g3); }
+.ct-seg[data-group="4"] { background: var(--ct-g4); }
+
+.ct-seg:hover { opacity: 0.95; }
+.ct-seg.is-current { opacity: 1; outline-color: var(--ct-ink); }
+
+/* --- foaia melodiei: rânduri pe liniile caietului --- */
+
+.ct-sheet-wrap {
+  padding: 10px 0 2px;
+  border-bottom: 1.5px solid rgba(30, 34, 61, 0.22);
+}
+
+.ct-sheet-wrap[hidden] { display: none; }
+
+.ct-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-sheet-head .ct-group-label { flex: 1; }
+
+.ct-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  /* position: relative ca offsetTop-ul rândurilor să fie relativ la FOAIE — derularea
+     evidențierii se face manual, pe containerul ăsta (vezi updateSheetHighlight). */
+  position: relative;
+  /* Melodiile lungi se derulează în interiorul foii — panoul nu are voie să crească la
+     nesfârșit peste pagina YouTube. */
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.ct-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 3px 6px;
+  border-left: 3px solid transparent;
+  opacity: 0.8;
+}
+
+.ct-sheet-row.is-current {
+  opacity: 1;
+  background: rgba(48, 88, 240, 0.06);
+  border-left-color: var(--ct-pencil);
+}
+
+/* eticheta secțiunii: scris de mână peste o dungă de evidențiator */
+.ct-sheet-tag {
+  min-width: 6.2em;
+  text-align: left;
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.1;
+  color: var(--ct-ink);
+  padding: 3px 9px 4px;
+  border: 0;
+  border-radius: 3px 8px 4px 9px;
+  background: rgba(30, 34, 61, 0.10);
+  cursor: pointer;
+  transform: rotate(-1deg);
+}
+
+.ct-sheet-tag[data-group="0"] { background: var(--ct-g0); }
+.ct-sheet-tag[data-group="1"] { background: var(--ct-g1); }
+.ct-sheet-tag[data-group="2"] { background: var(--ct-g2); }
+.ct-sheet-tag[data-group="3"] { background: var(--ct-g3); }
+.ct-sheet-tag[data-group="4"] { background: var(--ct-g4); }
+
+.ct-sheet-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.ct-sheet-chip { font-size: 15px; padding: 3px 9px 4px; cursor: pointer; }
+
+.ct-sheet-chip.is-now {
+  background: var(--ct-blue);
+  border-color: var(--ct-blue-dark);
+  color: #fff;
+  box-shadow: 1.5px 1.5px 0 var(--ct-blue-dark);
+}
+
+.ct-sheet-count {
+  margin-left: auto;
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--ct-ink-soft);
+}
+
+/* --- exersare --- */
+
+.ct-loop {
+  border: 1.6px solid var(--ct-ink);
+  background: transparent;
+  color: var(--ct-ink);
+  border-radius: 50% 45% 50% 48%;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.ct-loop:hover { opacity: 1; }
+.ct-loop.is-active { background: var(--ct-blue); border-color: var(--ct-blue-dark); color: #fff; opacity: 1; }
+
+.ct-practice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 2px;
+  padding: 6px 10px;
+  border: 1.6px dashed var(--ct-ink);
+  border-radius: var(--ct-wobble-b);
+  background: rgba(48, 88, 240, 0.06);
+}
+
+.ct-practice[hidden] { display: none; }
+.ct-practice-what { font-family: var(--ct-hand); font-weight: 400; font-size: 18px; }
+.ct-practice-speeds { display: flex; gap: 4px; }
+.ct-practice-stop { margin-left: auto; }
+
+/* secțiunea curentă, lângă acord: un abțibild mic */
+.ct-section-now {
+  align-self: flex-start;
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.1;
+  padding: 4px 10px 5px;
+  border-radius: 3px 8px 4px 9px;
+  background: rgba(30, 34, 61, 0.10);
+  color: var(--ct-ink);
+  transform: rotate(-2deg);
+  margin-bottom: 2px;
+}
+
+.ct-section-now[hidden] { display: none; }
+.ct-section-now[data-group="0"] { background: var(--ct-g0); }
+.ct-section-now[data-group="1"] { background: var(--ct-g1); }
+.ct-section-now[data-group="2"] { background: var(--ct-g2); }
+.ct-section-now[data-group="3"] { background: var(--ct-g3); }
+.ct-section-now[data-group="4"] { background: var(--ct-g4); }
+
+.ct-next-label.is-announce { color: var(--ct-pencil); }
+
+/* --- controale: capo + ton --- */
+
+.ct-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+}
+
+.ct-group { display: flex; align-items: center; gap: 6px; }
+
+.ct-group-label {
+  font-family: var(--ct-hand);
+  font-weight: 400;
+  font-size: 18px;
+  color: var(--ct-teal);
+  cursor: help;
+}
+
+.ct-capo-buttons { display: flex; gap: 4px; }
+
+.ct-btn {
+  font-family: var(--ct-print);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  color: var(--ct-ink);
+  border: 1.6px solid var(--ct-ink);
+  border-radius: var(--ct-wobble-a);
+  padding: 5px 9px 6px;
+  cursor: pointer;
+  min-width: 28px;
+}
+
+.ct-btn:nth-child(even) { border-radius: var(--ct-wobble-b); }
+.ct-btn:hover { background: var(--ct-paper-2); }
+
+/* Capo-ul sugerat trebuie să SARĂ în ochi (Andrei: „un highlight mai puternic, puțin mai
+   mare”): albastru pe fond, chenar gros, un pic mai mare decât frații lui, cu un cerc de
+   creion în jur. */
+.ct-capo.is-suggested {
+  color: var(--ct-blue);
+  font-weight: 800;
+  background: rgba(48, 88, 240, 0.16);
+  border: 2px solid var(--ct-blue);
+  box-shadow: 0 0 0 3px rgba(48, 88, 240, 0.22), 1.5px 1.5px 0 var(--ct-blue-dark);
+  transform: scale(1.18) rotate(-2deg);
+  position: relative;
+  z-index: 1;
+}
+
+.ct-capo.is-suggested.is-active { color: #fff; background: var(--ct-blue); }
+
+.ct-capo.is-active,
+.ct-btn.is-active {
+  background: var(--ct-blue);
+  border-color: var(--ct-blue-dark);
+  color: #fff;
+  box-shadow: 1.5px 1.5px 0 var(--ct-blue-dark);
+}
+
+.ct-capo-hint { font-family: var(--ct-hand); font-weight: 400; font-size: 15px; color: var(--ct-ink-soft); white-space: nowrap; }
+
+.ct-tr-value { min-width: 2em; text-align: center; font-family: var(--ct-print); font-size: 17px; font-weight: 700; }
+
+.ct-reset { margin-left: auto; }
+
+/* --- desenul diagramei: cerneală pe hârtie, puncte albastre --- */
+
+.ct-d-name { fill: #1e223d; font-family: "CT Playpen", "Playpen Sans", sans-serif; font-size: 15px; font-weight: 700; }
+.ct-d-fret, .ct-d-capo { fill: #5b6668; font-size: 11px; font-family: "CT Playpen", "Playpen Sans", sans-serif; }
+.ct-d-string, .ct-d-fretline { stroke: #1e223d; stroke-width: 1.2; stroke-opacity: 0.75; }
+.ct-d-nut { fill: #1e223d; }
+.ct-d-capo-bar { fill: #f54f1b; }
+.ct-d-mark { fill: #1e223d; font-size: 13px; }
+.ct-d-open { fill: none; stroke: #1e223d; stroke-width: 1.5; }
+.ct-d-dot, .ct-d-barre { fill: #3058f0; }

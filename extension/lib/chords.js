@@ -1,0 +1,109 @@
+// Recunoașterea acordului dintr-un vector chroma: potrivire pe șabloane.
+// Pur, fără chrome.*, testabil în Node.
+//
+// Un acord major = fundamentala + terță mare (4 semitonuri) + cvintă (7).
+// Un acord minor = fundamentala + terță mică (3) + cvintă (7).
+// Construim câte un șablon pentru fiecare din cele 12 fundamentale × 2 calități = 24,
+// apoi întrebăm: cu care șablon seamănă cel mai bine chroma măsurată?
+
+import { NOTES, NO_CHORD, parseChord } from './music-theory.js';
+import { CHROMA_SIZE } from './chroma.js';
+
+const INTERVALS = {
+  '': [0, 4, 7],    // major
+  m: [0, 3, 7],     // minor
+};
+
+// Fundamentala cântărește mai mult: e nota care dă numele acordului și, în muzică reală,
+// e de obicei și cea mai prezentă (bas + armonice).
+const WEIGHTS = [1.3, 1.0, 1.0];
+
+function buildTemplates() {
+  const out = [];
+  for (const [quality, intervals] of Object.entries(INTERVALS)) {
+    for (let root = 0; root < CHROMA_SIZE; root++) {
+      const vec = new Float64Array(CHROMA_SIZE);
+      intervals.forEach((iv, i) => { vec[(root + iv) % CHROMA_SIZE] = WEIGHTS[i]; });
+      let norm = 0;
+      for (const v of vec) norm += v * v;
+      out.push({ label: NOTES[root] + quality, root, vec, norm: Math.sqrt(norm) });
+    }
+  }
+  return out;
+}
+
+export const TEMPLATES = buildTemplates();
+
+/** Prag sub care spunem „nu e niciun acord clar” (N.C.). */
+export const DEFAULT_THRESHOLD = 0.6;
+
+/** Cât cântărește basul în decizie (0 = deloc, 1 = numai basul). */
+export const DEFAULT_BASS_WEIGHT = 0.3;
+
+/**
+ * @param {Float64Array} chroma 12 valori (index 0 = C)
+ * @param {object} [opts]
+ * @param {Float64Array} [opts.bass] chroma calculată DOAR din registrul grav — nota de bas
+ *   spune de obicei care e fundamentala acordului. Fără ea, acordurile înrudite se confundă:
+ *   G (G-B-D) cu un F# trecător în melodie conține exact Bm (B-D-F#), iar detectorul alege
+ *   greșit. Basul pe G rezolvă ambiguitatea, fiindcă fundamentala se aude jos.
+ * @param {boolean} [opts.scores] dacă e adevărat, întoarce și scorul FIECĂRUI șablon
+ *   (etichetă → scor) — analizorul compară candidatul cu acordul deja comis, nu doar cu pragul.
+ * @returns {{label:string, score:number, runnerUp:string|null, scores?:Record<string, number>}}
+ */
+export function matchChord(chroma, opts = {}) {
+  const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
+  const bass = opts.bass ?? null;
+
+  let norm = 0;
+  for (const v of chroma) norm += v * v;
+  norm = Math.sqrt(norm);
+  if (norm === 0) return { label: NO_CHORD, score: 0, runnerUp: null };
+
+  let bassMax = 0;
+  if (bass) for (const v of bass) if (v > bassMax) bassMax = v;
+
+  // Un vector de bas plin de zerouri NU e informație de bas — e absența ei. Dacă i-am da
+  // totuși pondere, numărătorul ar pierde termenul de bas dar numitorul ar rămâne 1,3, adică
+  // pragul de N.C. ar urca pe ascuns de la 0,60 la 0,78 și acorduri limpezi ar dispărea pe
+  // pasaje întregi fără bas (fingerpicking în registru înalt, capo sus, voce+pian).
+  const bassWeight = (bass && bassMax > 0) ? (opts.bassWeight ?? DEFAULT_BASS_WEIGHT) : 0;
+
+  const scores = opts.scores ? {} : null;
+  let best = null, second = null;
+  for (const t of TEMPLATES) {
+    let dot = 0;
+    for (let i = 0; i < CHROMA_SIZE; i++) dot += chroma[i] * t.vec[i];
+    const cosine = dot / (norm * t.norm);
+    // Media ponderată păstrează scorul în același interval ca similaritatea cosinus,
+    // deci pragul de N.C. rămâne comparabil cu și fără bas.
+    const bassSupport = bassMax > 0 ? bass[t.root] / bassMax : 0;
+    const score = (cosine + bassWeight * bassSupport) / (1 + bassWeight);
+    if (scores) scores[t.label] = score;
+
+    if (!best || score > best.score) { second = best; best = { label: t.label, score }; }
+    else if (!second || score > second.score) second = { label: t.label, score };
+  }
+
+  if (best.score < threshold) return { label: NO_CHORD, score: best.score, runnerUp: best.label, scores };
+  return { label: best.label, score: best.score, runnerUp: second?.label ?? null, scores };
+}
+
+/**
+ * Rudenia dintre două acorduri, pentru histerezisul din analizor:
+ *   'quality'  — aceeași fundamentală, altă calitate (A ↔ Am, F# ↔ F#m);
+ *   'relative' — relativa majoră/minoră (C ↔ Am, G ↔ Em, D ↔ Bm): două note comune din trei;
+ *   null       — orice altceva (inclusiv N.C.).
+ * Pe melodii reale, tocmai rudele astea sunt intrușii: terța e slabă în mix (bas + voce), iar
+ * șablonul se răstoarnă pentru o clipă spre ruda cu care împarte două note.
+ */
+export function chordRelation(a, b) {
+  const pa = parseChord(a), pb = parseChord(b);
+  if (!pa || !pb || (pa.root === pb.root && pa.quality === pb.quality)) return null;
+  if (pa.root === pb.root) return 'quality';
+  const ra = NOTES.indexOf(pa.root), rb = NOTES.indexOf(pb.root);
+  const aMinor = pa.quality === 'm', bMinor = pb.quality === 'm';
+  if (!aMinor && bMinor && (ra + 9) % 12 === rb) return 'relative'; // C → Am
+  if (aMinor && !bMinor && (ra + 3) % 12 === rb) return 'relative'; // Am → C
+  return null;
+}

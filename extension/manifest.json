@@ -1,0 +1,70 @@
+{
+  "manifest_version": 3,
+  "name": "ChordTab — acorduri pentru YouTube",
+  "version": "0.6.0",
+  "description": "Acordurile melodiei de pe YouTube, găsite local: bandă sincronizată, exersare cu încetinire, diagrame, capo și structură.",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "activeTab"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "ChordTab: pornește/oprește analiza acordurilor",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content/loader.js"
+      ],
+      "css": [
+        "content/panel.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options/options.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/content.js",
+        "lib/*.js",
+        "assets/*",
+        "fonts/*"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
+      ]
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "ChordTab: pornește/oprește analiza acordurilor"
+    }
+  }
+}

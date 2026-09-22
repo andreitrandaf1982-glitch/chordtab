@@ -1,0 +1,301 @@
+// Service worker: pornește/oprește captura la click pe iconiță și face releu de mesaje
+// offscreen -> content (documentul offscreen nu poate vorbi direct cu tabul).
+//
+// ATENȚIE la ciclul de viață MV3: Chrome oprește service workerul după ~30s fără evenimente.
+// În timpul analizei cu videoul rulând nu se întâmplă (CT_TIME-ul de la 250ms îl ține treaz),
+// dar la o PAUZĂ sau o reclamă mai lungă de 30s traficul încetează și SW-ul e reciclat, în
+// timp ce documentul offscreen continuă să captureze. De aceea starea capturii NU poate trăi
+// doar în memorie: se persistă în chrome.storage.session și se rehidratează la pornire.
+// Fără asta, un SW repornit arunca toate CHORD_EVENT-urile (panou înghețat) și transforma
+// butonul „Oprește” într-un restart care ștergea acordurile strânse.
+
+import { createLogger } from './lib/logger.js';
+
+const log = createLogger('background');
+
+const state = {
+  capturingTabId: null,
+  busy: false,        // o pornire/oprire e în curs (gardă sincronă contra dublu-click)
+  hydrated: false,
+};
+
+/** Citește starea persistată o singură dată, la prima nevoie după pornirea SW-ului. */
+async function ready() {
+  if (state.hydrated) return;
+  try {
+    const { capturingTabId } = await chrome.storage.session.get('capturingTabId');
+    state.capturingTabId = capturingTabId ?? null;
+  } catch (err) {
+    log.warn('Nu am putut reciti starea capturii:', err?.message);
+  }
+  state.hydrated = true;
+}
+
+async function setCapturingTab(tabId) {
+  state.capturingTabId = tabId;
+  state.hydrated = true;
+  try {
+    if (tabId === null) await chrome.storage.session.remove('capturingTabId');
+    else await chrome.storage.session.set({ capturingTabId: tabId });
+  } catch (err) {
+    log.warn('Nu am putut salva starea capturii:', err?.message);
+  }
+}
+
+// activeTab: `tabCapture` cere ca extensia să fi fost INVOCATĂ pe tab (click pe iconiță,
+// scurtătura Alt+Shift+C) — verificat pe YouTube real (21.09.2026): nici `host_permissions`
+// pe youtube.com nu înlocuiește gestul. Permisiunea rămâne cât timp tabul stă pe același
+// origin și dispare la închidere sau la navigare în altă parte. Ținem minte taburile invocate
+// ca panoul să spună adevărul cu un pas ÎNAINTE („apasă iconița”), nu după un eșec.
+const invoked = { tabs: new Set(), hydrated: false };
+
+async function readInvoked() {
+  if (invoked.hydrated) return;
+  try {
+    const { invokedTabs } = await chrome.storage.session.get('invokedTabs');
+    invoked.tabs = new Set(invokedTabs ?? []);
+  } catch (err) {
+    log.warn('Nu am putut reciti taburile invocate:', err?.message);
+  }
+  invoked.hydrated = true;
+}
+
+async function markInvoked(tabId, on) {
+  await readInvoked();
+  if (tabId == null) return;
+  if (on) invoked.tabs.add(tabId); else invoked.tabs.delete(tabId);
+  try {
+    await chrome.storage.session.set({ invokedTabs: [...invoked.tabs] });
+  } catch (err) {
+    log.warn('Nu am putut salva taburile invocate:', err?.message);
+  }
+}
+
+function isYouTubeOrigin(url) {
+  try { return new URL(url).hostname === 'www.youtube.com'; } catch { return false; }
+}
+
+chrome.action.onClicked.addListener(async (tab) => {
+  await markInvoked(tab?.id, true);
+  toggleCapture(tab, 'click pe iconiță');
+});
+
+function isWatchPage(url) {
+  // Strict pe scope-ul declarat: content scriptul se injectează DOAR pe www.youtube.com.
+  // Pe music.youtube.com / m.youtube.com am porni captura fără niciun panou și fără cale
+  // vizibilă de oprire — mai bine refuzăm decât să capturăm în gol.
+  try {
+    const u = new URL(url);
+    return u.hostname === 'www.youtube.com' && u.pathname === '/watch';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param want `true` = pornește, `false` = oprește, `null` = comută (clickul pe iconiță).
+ * Intenția contează: panoul cere „oprește” și când melodia s-a terminat singură, moment în
+ * care captura poate fi deja încheiată. O comutare oarbă ar PORNI atunci o captură nouă —
+ * exact pe dos față de ce s-a cerut.
+ */
+async function toggleCapture(tab, reason, want = null) {
+  // Gardă sincronă: două click-uri rapide porneau două startCapture concurente, iar calea de
+  // eroare a celui de-al doilea închidea documentul offscreen al primului.
+  if (state.busy) {
+    log.debug('O pornire/oprire e deja în curs — ignor cererea.');
+    return;
+  }
+  state.busy = true;
+  try {
+    if (!tab?.url || !isWatchPage(tab.url)) {
+      log.warn('Cerere de captură în afara unei pagini de video YouTube — ignor.', tab?.url);
+      return;
+    }
+    await ready();
+    const capturing = state.capturingTabId === tab.id;
+    if (want === false) {
+      if (capturing) await stopCapture(reason);
+      else log.debug('Cerere de oprire, dar nu capturăm pe tabul ăsta — nu fac nimic.');
+      return;
+    }
+    if (capturing) {
+      if (want !== true) await stopCapture(reason);
+      return;
+    }
+    if (state.capturingTabId !== null) {
+      // Cerem întâi permisiunea pentru tabul NOU și abia apoi o oprim pe cea veche. Invers,
+      // o analiză bună de pe tabul A era sacrificată pentru o pornire care nu putea reuși:
+      // pe un tab în care extensia n-a fost invocată, getMediaStreamId aruncă, iar A rămânea
+      // oprit la jumătatea melodiei fără ca nimic să-l repornească.
+      const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      await stopCapture('captură nouă pe alt tab');
+      await startCapture(tab, streamId);
+      return;
+    }
+    await startCapture(tab);
+  } catch (err) {
+    log.error('Eroare la pornirea/oprirea capturii:', err?.message || err);
+    await stopCapture('eroare').catch(() => {});
+    // Cel mai probabil motiv: tabCapture cere ca extensia să fi fost INVOCATĂ (click pe
+    // iconiță). Un click în pagină nu contează ca invocare, deci îi spunem omului ce să facă.
+    if (tab?.id != null) {
+      chrome.tabs.sendMessage(tab.id, {
+        target: 'content', type: 'CAPTURE_FAILED', reason: String(err?.message || err),
+      }).catch(() => {});
+    }
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function startCapture(tab, alreadyGranted = null) {
+  // ORDINEA CONTEAZĂ: cerem streamId ÎNAINTE de orice alt await. getMediaStreamId are nevoie
+  // de gestul utilizatorului (clickul pe iconiță), iar acesta se poate pierde peste un await.
+  // `alreadyGranted` vine de pe calea „captură nouă pe alt tab”, unde a fost cerut și mai
+  // devreme, tocmai ca să nu oprim captura veche înainte să știm că cea nouă poate porni.
+  const streamId = alreadyGranted
+    ?? await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  await ensureOffscreen();
+  await setCapturingTab(tab.id);
+  log.info('Pornesc captura pe tab', tab.id);
+  chrome.runtime
+    .sendMessage({ target: 'offscreen', type: 'START_CAPTURE', streamId, tabId: tab.id })
+    .catch((err) => log.error('START_CAPTURE nu a ajuns la offscreen:', err?.message));
+  notifyContent({ type: 'CAPTURE_STATE', capturing: true });
+}
+
+async function stopCapture(reason) {
+  await ready();
+  if (state.capturingTabId !== null) {
+    log.info('Opresc captura:', reason);
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP_CAPTURE' }).catch(() => {});
+    notifyContent({ type: 'CAPTURE_STATE', capturing: false });
+    await setCapturingTab(null);
+  }
+  // Închidem documentul necondiționat: dacă startCapture a crăpat după ce l-a creat,
+  // altfel ar rămâne agățat fără ca nimeni să-l mai închidă.
+  try {
+    await chrome.offscreen.closeDocument();
+  } catch {
+    // nu era deschis — ok
+  }
+}
+
+let offscreenReady = null;   // resolver-ul strângerii de mână cu documentul offscreen
+let creatingOffscreen = null; // promisiunea creării în curs (nu o porni de două ori)
+
+async function ensureOffscreen() {
+  const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+  if (contexts.length > 0) return;
+  if (creatingOffscreen) return creatingOffscreen; // o creare e deja în zbor
+
+  // Scriptul offscreen e modul ES => se încarcă asincron DUPĂ createDocument(). Așteptăm
+  // semnalul OFFSCREEN_READY, altfel START_CAPTURE se pierde în gol.
+  creatingOffscreen = (async () => {
+    const ready$ = new Promise((resolve) => { offscreenReady = resolve; });
+    await chrome.offscreen.createDocument({
+      url: 'offscreen/offscreen.html',
+      reasons: ['USER_MEDIA'],
+      justification: 'Analizează audio-ul tabului pentru detecția acordurilor de chitară.',
+    });
+    const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), 10000));
+    if (await Promise.race([ready$, timeout]) === 'timeout') {
+      log.warn('Documentul offscreen n-a semnalat OFFSCREEN_READY în 10s — continui oricum.');
+    }
+    offscreenReady = null;
+    log.debug('Document offscreen creat și pregătit.');
+  })().finally(() => { creatingOffscreen = null; });
+
+  return creatingOffscreen;
+}
+
+function notifyContent(msg) {
+  if (state.capturingTabId === null) return;
+  chrome.tabs.sendMessage(state.capturingTabId, { target: 'content', ...msg }).catch((err) => {
+    log.warn('Nu am putut anunța content scriptul:', err?.message);
+  });
+}
+
+// Releu: mesajele offscreen (CHORD_EVENT etc.) către content scriptul tabului capturat.
+// CT_TIME (content -> offscreen) NU trece pe aici: runtime.sendMessage ajunge direct la offscreen.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.target === 'background') {
+    // Panoul întreabă dacă butonul lui poate porni captura sau dacă e nevoie de iconiță.
+    if (msg.type === 'CAN_START') {
+      (async () => {
+        await readInvoked();
+        sendResponse({ invoked: sender?.tab?.id != null && invoked.tabs.has(sender.tab.id) });
+      })();
+      return true; // răspuns asincron
+    }
+    // Caietul meu: îl deschidem ca tab de extensie (content scriptul n-are chrome.tabs).
+    // Dacă e deja deschis, îl aducem în față în loc să facem încă unul.
+    if (msg.type === 'OPEN_NOTEBOOK') {
+      (async () => {
+        const url = chrome.runtime.getURL('caiet/caiet.html');
+        // Fără permisiunea „tabs” (care ar cere „citește istoricul”), tabs.query nu vede
+        // adresele; propriile pagini se găsesc prin runtime.getContexts, fără permisiuni.
+        const [ctx] = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [url] });
+        if (ctx?.tabId != null) {
+          await chrome.tabs.update(ctx.tabId, { active: true });
+          if (ctx.windowId != null) await chrome.windows.update(ctx.windowId, { focused: true }).catch(() => {});
+        } else {
+          await chrome.tabs.create({ url });
+        }
+      })().catch((err) => log.warn('Nu am putut deschide caietul:', err?.message));
+      return;
+    }
+    if (msg.type === 'OFFSCREEN_READY') {
+      log.debug('Documentul offscreen a semnalat că e pregătit.');
+      offscreenReady?.();
+      return;
+    }
+    // Documentul offscreen n-a putut porni captura. Fără asta, content rămânea pe „ascult”
+    // la nesfârșit, fiindcă primise deja CAPTURE_STATE capturing:true.
+    if (msg.type === 'CAPTURE_ERROR') {
+      log.error('Offscreen nu a putut porni captura:', msg.reason);
+      (async () => {
+        const tabId = state.capturingTabId;
+        await stopCapture('eroare în offscreen');
+        if (tabId != null) {
+          chrome.tabs.sendMessage(tabId, {
+            target: 'content', type: 'CAPTURE_FAILED', reason: String(msg.reason || ''),
+          }).catch(() => {});
+        }
+      })();
+      return;
+    }
+    // Butoanele din panoul de sub video.
+    if (msg.type === 'REQUEST_START' || msg.type === 'REQUEST_STOP') {
+      if (sender?.tab) {
+        toggleCapture(sender.tab, 'cerere din panou', msg.type === 'REQUEST_START');
+      }
+      return;
+    }
+  }
+  if (msg?.target === 'content') {
+    // Handlerul e sincron, dar rehidratarea e asincronă: după un restart de SW starea încă
+    // nu e citită, iar un guard naiv ar arunca tăcut toate acordurile.
+    (async () => {
+      await ready();
+      if (state.capturingTabId !== null) notifyContent(msg);
+    })();
+  }
+});
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  await ready();
+  if (tabId === state.capturingTabId) stopCapture('tab închis');
+  markInvoked(tabId, false);
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  // `status: 'loading'` prinde ȘI refresh-ul (F5), unde changeInfo.url lipsește fiindcă
+  // adresa nu se schimbă. Fără el, captura rămânea fantomă după reload: continua să consume
+  // resurse, poluia cronologia cu evenimente vechi și inversa sensul butonului din panou.
+  if (!changeInfo.url && changeInfo.status !== 'loading') return;
+  await ready();
+  if (tabId === state.capturingTabId) stopCapture(changeInfo.url ? 'navigare' : 'reîncărcare');
+  // Plecat de pe youtube.com => Chrome a retras activeTab; uităm și noi invocarea.
+  if (changeInfo.url && !isYouTubeOrigin(changeInfo.url)) markInvoked(tabId, false);
+});
